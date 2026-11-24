@@ -13,8 +13,8 @@ part 'event_log_state.dart';
 
 /// The event log of the document [doc], newest first.
 ///
-/// Recording is off until [setRecording] turns it on: the cubit stops a log
-/// the app still runs from before. [close] stops it in the app.
+/// Recording is off until [setRecording] turns it on. [close] stops it in
+/// the app.
 class EventLogCubit extends Cubit<EventLogState> {
   /// While recording, the cubit renews the lease of the log in the app
   /// every [renewEvery].
@@ -24,8 +24,8 @@ class EventLogCubit extends Cubit<EventLogState> {
     Duration renewEvery = const Duration(seconds: 10),
   }) : super(const EventLogState()) {
     _renewal = LeaseRenewal(every: renewEvery, onMissed: _missed);
+    // A log the app already runs stays: another DevTools window can own it.
     _events = _client.events.listen(_onEvent);
-    unawaited(_stop());
   }
 
   /// The events kept; the oldest go first.

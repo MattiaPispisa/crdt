@@ -36,6 +36,11 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
     unawaited(reopen());
   }
 
+  /// The error shown when another DevTools window opened time travel on the
+  /// document.
+  static const String taken =
+      'Another DevTools window opened time travel on this document.';
+
   final ChangeMirror _mirror;
 
   CrdtLfClient get _client => _mirror.client;
@@ -169,8 +174,8 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
         session: session.session,
         cursor: state.cursor,
       );
-    } on HistorySessionClosed {
-      _resume(session);
+    } on HistorySessionClosed catch (e) {
+      _resume(session, e);
     } on Object {
       // The next tick tries again.
     }
@@ -178,8 +183,20 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
 
   // A lease that ran out (a paused app, a throttled tab) ends the session.
   // A newer session, open or opening, already replaced [ended].
-  void _resume(HistorySessionInfo ended) {
+  void _resume(HistorySessionInfo ended, HistorySessionClosed error) {
     if (isClosed || _opening || state.session != ended) return;
+    // Another DevTools window took the session: taking it back at once
+    // would end the other one's, and so on.
+    if (error is HistorySessionReplaced) {
+      _renewal?.cancel();
+      emit(
+        const TimeTravelState()._copyWith(
+          status: LoadStatus.failure,
+          error: () => taken,
+        ),
+      );
+      return;
+    }
     _keepCursor = true;
     unawaited(reopen());
   }
@@ -234,8 +251,8 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
           valueError: () => null,
         ),
       );
-    } on HistorySessionClosed {
-      _resume(session);
+    } on HistorySessionClosed catch (e) {
+      _resume(session, e);
     } on Object catch (e) {
       if (moved()) return;
       emit(

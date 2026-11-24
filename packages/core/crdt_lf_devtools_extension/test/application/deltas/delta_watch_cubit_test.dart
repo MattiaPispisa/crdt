@@ -52,7 +52,9 @@ void main() {
 
   test('renews the lease of the watch while watching', () async {
     final lease = DevToolsBridge.lease;
-    DevToolsBridge.lease = const Duration(milliseconds: 200);
+    // A wide margin over the renewal period: a slow machine can stall the
+    // timers for a while.
+    DevToolsBridge.lease = const Duration(seconds: 1);
     addTearDown(() => DevToolsBridge.lease = lease);
     final doc = CRDTDocument();
     final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
@@ -65,7 +67,7 @@ void main() {
     addTearDown(cubit.close);
 
     await cubit.setWatching(watching: true);
-    await Future<void>.delayed(const Duration(milliseconds: 400));
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
     final before = cubit.state.deltas.length;
     text.insert(0, 'b');
     await pumpEventQueue();

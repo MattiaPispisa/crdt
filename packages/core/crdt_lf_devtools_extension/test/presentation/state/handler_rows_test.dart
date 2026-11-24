@@ -45,6 +45,28 @@ void main() {
     expect(_open(handlerRows(list)), ['a', '  shared', 'b', '  shared']);
   });
 
+  test('a shared child opens its children once, and once per list', () {
+    final list = HandlerList(
+      open: [
+        _handler('root', ['b', 'c', 'c']),
+        _handler('b', ['d']),
+        _handler('c', ['d']),
+        _handler('d', ['e']),
+        _handler('e'),
+      ],
+      closed: const [],
+      deleted: const [],
+    );
+    expect(_open(handlerRows(list)), [
+      'root',
+      '  b',
+      '    d',
+      '      e',
+      '  c',
+      '    d',
+    ]);
+  });
+
   test('a cycle is drawn once per path and its handlers stay listed', () {
     final list = HandlerList(
       open: [

@@ -547,12 +547,14 @@ abstract final class DevToolsBridge {
     _Tracked tracked,
     CRDTDocument doc,
   ) {
+    final replaced = tracked.historyId;
     tracked.closeHistory();
     final session = doc.toTimeTravel();
     final id = _nextSession++;
     tracked
       ..history = session
       ..historyId = id
+      ..replacedHistoryId = replaced
       ..historyIdle.reset();
     _expiring.add(tracked.id);
     return {
@@ -574,7 +576,11 @@ abstract final class DevToolsBridge {
     final session = tracked.history;
     final id = _intParam(params, 'session');
     if (session == null || id != tracked.historyId) {
-      throw ArgumentError.value(params['session'], 'session', 'Not open');
+      throw ArgumentError.value(
+        params['session'],
+        'session',
+        id == tracked.replacedHistoryId ? 'Replaced' : 'Not open',
+      );
     }
     tracked.historyIdle.reset();
     final cursor = _intParam(params, 'cursor');
@@ -885,6 +891,10 @@ final class _Tracked {
   HistorySession? history;
 
   int? historyId;
+
+  // The session a `historyOpen` ended last: its client learns another
+  // client took the document.
+  int? replacedHistoryId;
 
   final Stopwatch historyIdle;
 

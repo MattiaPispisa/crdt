@@ -338,6 +338,27 @@ void main() {
     expect(cubit.state.operation, isNull);
   });
 
+  test('a prune that shrinks the list keeps a filter working', () async {
+    final doc = CRDTDocument(documentId: 'd');
+    final text = CRDTTextHandler(doc, 'text');
+    for (var i = 0; i < 3; i++) {
+      text.insert(i, 'x');
+    }
+    final cubit = await cubitOf(doc);
+    cubit.setFilter(const ChangeFilter(handler: 'text'));
+
+    doc.takeSnapshot();
+    text.insert(0, 'y');
+    await settle();
+    expect(cubit.state.status, LoadStatus.loaded);
+    expect(visibleIds(cubit), [doc.exportChanges().single.id]);
+
+    text.insert(0, 'z');
+    await settle();
+    expect(cubit.state.status, LoadStatus.loaded);
+    expect(cubit.state.visible, hasLength(2));
+  });
+
   test('a failed sync reports the error', () async {
     final cubit = ChangeLogCubit(
       ChangeMirror(client, 42),

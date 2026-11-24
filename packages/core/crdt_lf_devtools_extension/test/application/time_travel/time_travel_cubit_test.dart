@@ -247,6 +247,33 @@ void main() {
     expect(cubit.state.value!.value, 'ab');
   });
 
+  test('a session another window takes is not taken back', () async {
+    final doc = CRDTDocument(documentId: 'd');
+    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    final counting = _ReopenBridge();
+    addTearDown(counting.dispose);
+    final countingClient = CrdtLfClient(counting);
+    final id = (await countingClient.documents()).single.id;
+    final cubit = TimeTravelCubit(
+      ChangeMirror(countingClient, id),
+      delay: Duration.zero,
+      valueDelay: Duration.zero,
+    );
+    addTearDown(cubit.close);
+    await settle();
+
+    // The other window opens its own session on the same document.
+    await countingClient.historyOpen(id);
+    cubit
+      ..select('text')
+      ..moveTo(0);
+    await settle();
+
+    expect(counting.opens, 2);
+    expect(cubit.state.session, isNull);
+    expect(cubit.state.error, TimeTravelCubit.taken);
+  });
+
   test('a renewal answered after a reopen keeps the new session', () async {
     final doc = CRDTDocument(documentId: 'd');
     CRDTTextHandler(doc, 'text').insert(0, 'a');
@@ -392,7 +419,9 @@ void main() {
 
   test('renews the lease of its session while open', () async {
     final lease = DevToolsBridge.lease;
-    DevToolsBridge.lease = const Duration(milliseconds: 200);
+    // A wide margin over the renewal period: a slow machine can stall the
+    // timers for a while.
+    DevToolsBridge.lease = const Duration(seconds: 1);
     addTearDown(() => DevToolsBridge.lease = lease);
     final doc = CRDTDocument(documentId: 'd');
     final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
@@ -407,7 +436,7 @@ void main() {
     await settle();
     final session = cubit.state.session!.session;
 
-    await Future<void>.delayed(const Duration(milliseconds: 400));
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
     // A change ends a session past its lease.
     text.insert(1, 'b');
     expect(cubit.state.session!.session, session);

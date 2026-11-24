@@ -140,7 +140,6 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
       );
       if (isClosed) return;
       final read = _mirror.read(_mark);
-      _mark = read.mark;
       // Before `replaceFrom`, which changes the tables the old index reads.
       final wasLoaded = state.selected != null;
       final previous = state.index;
@@ -166,9 +165,12 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
           error: () => null,
         ),
       );
+      _mark = read.mark;
       if (pending) unawaited(reloadOperation());
     } on Object catch (e) {
       if (isClosed) return;
+      // The next load reads the whole mirror again.
+      _mark = null;
       emit(state._copyWith(status: LoadStatus.failure, error: () => '$e'));
     }
   }
@@ -208,7 +210,8 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
     var from = 0;
     // The cache follows the index only while each state builds it.
     if (filter == _matchedFilter && identical(_matchedIndex, previous)) {
-      from = min(keep, previous.entries.length);
+      // `previous.entries` reads the tables `replaceFrom` cut.
+      from = min(keep, previous._length);
       final positions = index._tables?.positions ?? const {};
       while (_matched.isNotEmpty &&
           (positions[_matched.last.change.id] ?? from) >= from) {

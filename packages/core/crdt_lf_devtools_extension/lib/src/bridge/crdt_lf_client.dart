@@ -111,7 +111,8 @@ class CrdtLfClient {
   /// Moves the [session] to [cursor] and reads [handler] there; no value
   /// when [handler] is `null`.
   ///
-  /// Throws a [HistorySessionClosed] when the app has no such session.
+  /// Throws a [HistorySessionClosed] when the app has no such session, a
+  /// [HistorySessionReplaced] when a newer session replaced it.
   Future<HistoryState> historyState(
     int doc, {
     required int session,
@@ -131,7 +132,10 @@ class CrdtLfClient {
         ..._limits(maxItems, maxString, maxDepth),
       });
     } on BridgeCallException catch (e) {
-      // The app refuses an unknown session with this text.
+      // The app refuses an unknown session with these texts.
+      if (e.message.contains('Replaced')) {
+        throw HistorySessionReplaced(e.method, e.message);
+      }
       if (!e.message.contains('Not open')) rethrow;
       throw HistorySessionClosed(e.method, e.message);
     }

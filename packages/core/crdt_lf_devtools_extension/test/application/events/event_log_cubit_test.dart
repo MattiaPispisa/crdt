@@ -49,7 +49,9 @@ void main() {
 
   test('renews the lease of the log while recording', () async {
     final lease = DevToolsBridge.lease;
-    DevToolsBridge.lease = const Duration(milliseconds: 200);
+    // A wide margin over the renewal period: a slow machine can stall the
+    // timers for a while.
+    DevToolsBridge.lease = const Duration(seconds: 1);
     addTearDown(() => DevToolsBridge.lease = lease);
     final doc = CRDTDocument();
     final text = CRDTTextHandler(doc, 'text');
@@ -62,7 +64,7 @@ void main() {
     addTearDown(cubit.close);
 
     await cubit.setRecording(recording: true);
-    await Future<void>.delayed(const Duration(milliseconds: 400));
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
     text.insert(0, 'a');
     await pumpEventQueue();
     expect(cubit.state.events, hasLength(1));
@@ -143,15 +145,20 @@ void main() {
     expect(cubit.state.events, isEmpty);
   });
 
-  test('stops a stale log at start and its own log at close', () async {
+  test('leaves a log it did not start, and stops its own at close', () async {
     final doc = CRDTDocument();
     final id = (await client.documents()).single.id;
+    // Another DevTools window records.
     await client.eventsStart(id);
 
-    final stale = EventLogCubit(client, id);
+    final other = EventLogCubit(client, id);
     await pumpEventQueue();
-    expect(await recording(), isFalse);
-    await stale.close();
+    expect(other.state.recording, isFalse);
+    expect(await recording(), isTrue);
+    await other.close();
+    await pumpEventQueue();
+    expect(await recording(), isTrue);
+    await client.eventsStop(id);
 
     final cubit = EventLogCubit(client, id);
     await cubit.setRecording(recording: true);

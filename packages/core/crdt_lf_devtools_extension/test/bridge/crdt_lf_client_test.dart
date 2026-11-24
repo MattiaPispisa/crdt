@@ -161,6 +161,22 @@ void main() {
     expect(state.cursor, 1);
     expect(state.frontiers, hasLength(1));
     expect(state.value, 'a');
+    final newer = await client.historyOpen(id);
+    await expectLater(
+      client.historyState(id, session: session.session, cursor: 0),
+      throwsA(isA<HistorySessionReplaced>()),
+    );
+    await client.historyClose(id, newer.session);
+    await expectLater(
+      client.historyState(id, session: newer.session, cursor: 0),
+      throwsA(
+        isA<HistorySessionClosed>().having(
+          (e) => e,
+          'replaced',
+          isNot(isA<HistorySessionReplaced>()),
+        ),
+      ),
+    );
     await client.historyClose(id, session.session);
     await expectLater(
       client.historyState(id, session: session.session, cursor: 0),

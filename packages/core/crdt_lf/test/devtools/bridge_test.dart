@@ -766,14 +766,18 @@ void main() {
       expect(second, isNot(first));
       expect(
         () => historyState(doc, first, 0),
-        throwsA(isA<ArgumentError>()),
+        throwsA(
+          isA<ArgumentError>().having((e) => e.message, 'message', 'Replaced'),
+        ),
       );
 
       final params = {'doc': '${trackedId(doc)}', 'session': '$second'};
       expect(DevToolsBridge.call('historyClose', params), isEmpty);
       expect(
         () => historyState(doc, second, 0),
-        throwsA(isA<ArgumentError>()),
+        throwsA(
+          isA<ArgumentError>().having((e) => e.message, 'message', 'Not open'),
+        ),
       );
     });
 

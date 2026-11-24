@@ -117,11 +117,14 @@ List<OpenRow> _openRows(
   final reached = <String>{};
 
   List<OpenRow> visit(HandlerSummary h, int depth, Set<String> path) {
-    reached.add(h.id);
+    // A handler under several containers opens its own children once: a
+    // chain of shared children would grow the rows exponentially.
+    final expand = reached.add(h.id);
     final children = <OpenRow>[
-      for (final child in h.children)
-        if (byId[child.id] case final next? when !path.contains(next.id))
-          ...visit(next, depth + 1, {...path, next.id}),
+      if (expand)
+        for (final id in {for (final child in h.children) child.id})
+          if (byId[id] case final next? when !path.contains(next.id))
+            ...visit(next, depth + 1, {...path, next.id}),
     ];
     if (children.isEmpty && !matches(h)) return const [];
     return [OpenRow(h, depth), ...children];

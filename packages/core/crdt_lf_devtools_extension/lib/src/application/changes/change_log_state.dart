@@ -107,7 +107,7 @@ class ChangeIndex {
   ChangeIndex replaceFrom(int from, List<MirrorEntry> added) {
     final tables = _tables;
     if (tables != null && tables.entries.length != _length) {
-      return empty.extend([...entries.take(from), ...added]);
+      return empty.extend([...tables.entries.take(from), ...added]);
     }
     final next =
         (tables ?? _IndexTables())

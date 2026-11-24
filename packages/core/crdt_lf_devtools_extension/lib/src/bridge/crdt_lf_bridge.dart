@@ -46,3 +46,9 @@ class BridgeCallException implements Exception {
 class HistorySessionClosed extends BridgeCallException {
   const HistorySessionClosed(super.method, super.message);
 }
+
+/// A [HistorySessionClosed] for a session that a newer one replaced, maybe
+/// opened by another DevTools window.
+class HistorySessionReplaced extends HistorySessionClosed {
+  const HistorySessionReplaced(super.method, super.message);
+}
