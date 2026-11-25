@@ -7,6 +7,8 @@ import Layout from "@theme/Layout";
 import Heading from "@theme/Heading";
 import CodeBlock from "@theme/CodeBlock";
 
+import { CoverageBadges } from "../components/PackageCoverage";
+import { recipeFile, useRecipe } from "../components/Recipe/data";
 import styles from "./index.module.css";
 
 type Card = {
@@ -115,20 +117,19 @@ const connectors: Card[] = [
   },
 ];
 
-const snippet = `final alice = CRDTDocument();
-final note = CRDTFugueTextHandler(alice, 'note');
-note.insert(0, 'Hello world');
-
-// Bob, on another device, offline until now.
-final bob = CRDTDocument();
-bob.importChanges(alice.exportChanges());
-
-print(CRDTFugueTextHandler(bob, 'note').value);
-// Hello world`;
+// The conflict of the two-peers recipe: code that CI compiles and runs.
+function useHeroSnippet(): string {
+  const merge = recipeFile(useRecipe("two-peers"), "main.dart").regions.merge;
+  if (merge === undefined) {
+    throw new Error('Recipe "two-peers", file "main.dart": no region "merge".');
+  }
+  return merge;
+}
 
 function Hero() {
   const { siteConfig } = useDocusaurusContext();
   const greyhoundUrl = siteConfig.customFields?.greyhoundUrl as string;
+  const snippet = useHeroSnippet();
   return (
     <header className={styles.hero}>
       <div className={clsx("container", styles.heroInner)}>
@@ -207,6 +208,52 @@ function Features() {
               <p className={styles.cardDescription}>{feature.description}</p>
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const proofs = [
+  "Every handler passes one shared convergence suite, on random edits.",
+  "The suite is checked against handlers broken on purpose.",
+  "Most pure Dart packages are also tested in Chrome.",
+  "Every recipe on this site is checked by a test in CI.",
+];
+
+function Trust() {
+  return (
+    <section className={clsx(styles.section, styles.sectionAlt)}>
+      <div className={clsx("container", styles.trust)}>
+        <div>
+          <Heading as="h2">Built to be trusted</Heading>
+          <p>
+            Peers that receive the same edits read the same data, whatever the
+            order and however long they stayed offline. The handlers check that
+            promise on random edits, and every published package is tested in
+            CI and shows its coverage.
+          </p>
+          <div className={styles.heroButtons}>
+            <Link className="button button--primary" to="/docs/trust">
+              Can you trust it?
+            </Link>
+          </div>
+        </div>
+        <div className={styles.trustPanel}>
+          <ul className={styles.proofs}>
+            {proofs.map((proof) => (
+              <li key={proof}>{proof}</li>
+            ))}
+          </ul>
+          <CoverageBadges
+            only={[
+              "hlc_dart",
+              "crdt_lf",
+              "crdt_lf_persistence",
+              "crdt_socket_sync",
+              "crdt_lf_flutter",
+            ]}
+          />
         </div>
       </div>
     </section>
@@ -318,6 +365,7 @@ export default function Home(): ReactNode {
       <Hero />
       <main>
         <Features />
+        <Trust />
         <section className={styles.section}>
           <div className="container">
             <Heading as="h2" className={styles.sectionTitle}>

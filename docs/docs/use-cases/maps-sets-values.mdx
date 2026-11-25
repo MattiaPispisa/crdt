@@ -3,6 +3,7 @@ title: Maps, sets and values
 description: Keys and values, sets of items and single values — and what happens when an add and a remove meet.
 ---
 
+import MergeTrace from '@site/src/components/MergeTrace';
 import NextSteps from '@site/src/components/NextSteps';
 
 # Maps, sets and values
@@ -28,26 +29,13 @@ the other one is lost. That is simple, and it is right when only the newest
 value matters. But "later" is just whose clock was ahead, so Bob's intent can
 disappear with no visible reason.
 
-An **Observed-Removed** (OR) structure answers with what each peer **saw**:
+An **Observed-Removed** (OR) structure answers with what each peer **saw**: a
+remove takes away only what its peer had seen. Alice's remove never saw Bob's
+add, so **the add wins**, and `urgent` stays. Nobody's edit is lost by accident.
 
-- every `add` (or `put`) gets a unique **tag**;
-- a `remove` deletes only the tags that peer had **observed**;
-- a value is present while it has at least one tag that was not removed.
+<MergeTrace id="or-add-remove" />
 
-Alice's remove never saw Bob's new tag, so it cannot delete it: **the add
-wins**, and `urgent` stays. Nobody's edit is lost by accident.
-
-```mermaid
-sequenceDiagram
-    participant A as Alice
-    participant B as Bob
-    Note over A,B: both hold {urgent} (tag t1)
-    A->>A: remove(urgent): drops t1
-    B->>B: add(urgent): new tag t2
-    A-->>B: sync
-    B-->>A: sync
-    Note over A,B: the remove never saw t2 → {urgent}
-```
+[OR](../deep-dive/merge-rules/or.mdx) explains how.
 
 ## OR-Set
 
@@ -62,7 +50,8 @@ print(tags.value); // {urgent}
 print(tags.contains('urgent')); // true
 ```
 
-Two peers that add the same value each give it a tag of their own. Undo works
+Two peers that add the same value each give it a
+[tag](../deep-dive/merge-rules/or.mdx) of their own. Undo works
 on tags too: undoing Alice's add removes **her** tag, and the value stays in the
 set while Bob's tag is there (see [Undo and redo](./undo-redo.mdx)).
 
@@ -86,7 +75,7 @@ print(scores.containsKey('ada')); // true
 
 - A `put` concurrent with a `remove` of the same key wins, like the OR-Set.
 - Two peers that `put` the same key at the same time converge on one value:
-  the write with the higher stamp.
+  the later write (see [OR](../deep-dive/merge-rules/or.mdx)).
 - Keys can be of any type with a `ValueCodec` (`keyCodec`, `valueCodec`).
 
 ## Last-writer-wins map

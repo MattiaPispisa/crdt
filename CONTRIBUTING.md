@@ -140,7 +140,8 @@ On every pull request, each touched package is checked with:
   fails the build;
 - **tests** — the Dart tests, the web ones (`dart test -p chrome`) and, for the
   Flutter packages, `flutter test`;
-- **coverage** — a minimum threshold per package (from 70% to 90%).
+- **coverage** — a minimum threshold per package, set in the CI workflows
+  (`.github/workflows/`).
 
 The coverage gate is the reason why **new behaviour needs new tests**: untested
 code lowers the percentage, the threshold is not reached and the pull request

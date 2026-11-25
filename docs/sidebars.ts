@@ -25,6 +25,7 @@ const sidebars: SidebarsConfig = {
   docs: [
     'introduction',
     'getting-started',
+    'trust',
     section('Recipes', 'recipes/index', [
       'recipes/two-peers',
       'recipes/persisted-note',
@@ -108,6 +109,11 @@ const sidebars: SidebarsConfig = {
     section('Deep dive', 'deep-dive/index', [
       'deep-dive/time-hlc',
       'deep-dive/documents-and-changes',
+      section('Merge rules', 'deep-dive/merge-rules/index', [
+        'deep-dive/merge-rules/fugue',
+        'deep-dive/merge-rules/or',
+        'deep-dive/merge-rules/move',
+      ]),
       'deep-dive/transactions',
       'deep-dive/reactivity',
       'deep-dive/handler-deltas',

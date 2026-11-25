@@ -4,11 +4,20 @@ sidebar_label: Two peers
 description: "Two documents edit the same text offline, then merge to the same result."
 ---
 
+import MergeTrace from '@site/src/components/MergeTrace';
 import Recipe from '@site/src/components/Recipe';
 
 # Two peers, one result
 
-The smallest CRDT program: two peers, one text, two edits made at the same
-time with no connection, and one merged result on both sides.
+The smallest CRDT program with a conflict: two peers write at the same spot of
+one text, with no connection. After the merge both read the same text, and
+each insert is still whole.
 
 <Recipe id="two-peers" />
+
+## The merge, step by step
+
+The same scenario, on two documents with fixed peer ids. Each color is the peer
+that wrote the text.
+
+<MergeTrace id="fugue-same-spot" />

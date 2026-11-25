@@ -23,9 +23,11 @@
 //
 // The docs site reads the same regions in `docs/plugins/recipes/source.ts`:
 // the two parsers follow the same rules. Each run also checks that every
-// `<Recipe>` and `<RecipeSnippet>` of a page in `docs/docs` names a recipe, a
-// file and a region that exist: the site build fails on them too, but it runs
-// only on a deploy.
+// manifest names a `test` that exists. It also checks that every `<Recipe>` and
+// `<RecipeSnippet>` of a page in `docs/docs` names a recipe, a file and a
+// region that exist, and that every `<MergeTrace>` names a trace in
+// `crdt_lf_recipes/traces`: the site build fails on them too, but it runs only
+// on a deploy.
 import 'dart:io' as io;
 
 import 'package:path/path.dart' as path;
@@ -35,6 +37,7 @@ import 'logs.dart';
 import 'process.dart';
 
 const _recipesDir = 'packages/_internal/crdt_lf_recipes/recipes';
+const _tracesDir = 'packages/_internal/crdt_lf_recipes/traces';
 const _pagesDir = 'docs/docs';
 
 final _block = RegExp(
@@ -43,6 +46,7 @@ final _block = RegExp(
 );
 final _snippetTag = RegExp(r'<RecipeSnippet\b([^>]*)>', dotAll: true);
 final _recipeTag = RegExp(r'<Recipe\s+id="([^"]+)"');
+final _traceTag = RegExp(r'<MergeTrace\s+id="([^"]+)"');
 final _attribute = RegExp(r'(\w+)="([^"]*)"');
 final _marker = RegExp(r'^\s*//\s*#(docregion|enddocregion)\s+(\S+)\s*$');
 final _licenseLine = RegExp('^// (Copyright|SPDX-License-Identifier)');
@@ -192,13 +196,21 @@ _Recipes _loadRecipes(String root) {
         ].join('\n');
       }
     }
-    recipes[map['id'] as String] = files;
+    final id = map['id'] as String;
+    final test = map['test'] as String?;
+    if (test == null) {
+      throw _RecipeError('Recipe "$id": no "test".');
+    }
+    if (!io.File(path.join(root, test)).existsSync()) {
+      throw _RecipeError('Recipe "$id": $test does not exist.');
+    }
+    recipes[id] = files;
     final variantOf = map['variantOf'] as String?;
     if (variantOf != null) {
-      variants[map['id'] as String] = variantOf;
+      variants[id] = variantOf;
     }
     if (map['variant'] != null) {
-      labelled.add(map['id'] as String);
+      labelled.add(id);
     }
   }
 
@@ -222,8 +234,8 @@ _Recipes _loadRecipes(String root) {
   return _Recipes(recipes, copies);
 }
 
-/// Fails when a page of the docs site shows a recipe, a file or a region that
-/// does not exist.
+/// Fails when a page of the docs site shows a recipe, a file, a region or a
+/// trace that does not exist.
 void _checkPages(String root, Map<String, Map<String, _Source>> recipes) {
   final problems = <String>[];
   final pages = io.Directory(path.join(root, _pagesDir))
@@ -238,6 +250,13 @@ void _checkPages(String root, Map<String, Map<String, _Source>> recipes) {
     for (final match in _recipeTag.allMatches(text)) {
       if (!recipes.containsKey(match[1])) {
         problems.add('$name: no recipe "${match[1]}".');
+      }
+    }
+
+    for (final match in _traceTag.allMatches(text)) {
+      final trace = path.join(root, _tracesDir, '${match[1]}.json');
+      if (!io.File(trace).existsSync()) {
+        problems.add('$name: no trace "${match[1]}" in $_tracesDir.');
       }
     }
 

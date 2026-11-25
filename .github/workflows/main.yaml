@@ -204,7 +204,7 @@ jobs:
     uses: ./.github/workflows/dart_package.yaml
     with:
       working_directory: ./packages/core/crdt_socket_sync
-      min_coverage: 70
+      min_coverage: 85
       package_name: crdt_socket_sync
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -343,7 +343,7 @@ jobs:
     uses: ./.github/workflows/flutter_package.yaml
     with:
       working_directory: ./packages/core/crdt_lf_flutter
-      min_coverage: 80
+      min_coverage: 90
       package_name: crdt_lf_flutter
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

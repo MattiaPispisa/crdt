@@ -164,8 +164,6 @@ Other bricks of the crdt "system" are:
 [pub_link]: https://pub.dev/packages/crdt_socket_sync
 [pub_points]: https://img.shields.io/pub/points/crdt_socket_sync
 [pub_likes]: https://img.shields.io/pub/likes/crdt_socket_sync
-[codecov_badge]: https://codecov.io/gh/MattiaPispisa/crdt/branch/main/graph/badge.svg?token=00000000-0000-0000-0000-000000000000
-[codecov_link]: https://codecov.io/gh/MattiaPispisa/crdt
 [ci_badge]: https://img.shields.io/github/actions/workflow/status/MattiaPispisa/crdt/main.yaml
 [ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml
 [pub_publisher]: https://img.shields.io/pub/publisher/crdt_socket_sync

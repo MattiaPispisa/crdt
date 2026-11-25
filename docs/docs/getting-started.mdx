@@ -48,8 +48,12 @@ send to each other.
 
 Each peer has its own document. Here the two documents live in one program; in
 an app they live on two devices, and the changes travel over the network.
+Both peers write at the same spot while offline: that is a conflict.
 
 <RecipeSnippet id="two-peers" file="main.dart" region="merge" />
+
+Nobody resolves the conflict by hand. Each insert stays whole, and the order of
+the two inserts comes from the peer ids, so every peer reads the same text.
 
 Importing the same change twice does nothing, so a peer can send everything it
 has without keeping track of what the other side already saw. In a real app

@@ -1,0 +1,233 @@
+{
+  "kind": "list",
+  "peers": [
+    "Alice",
+    "Bob"
+  ],
+  "steps": [
+    {
+      "caption": "Alice writes three todos.",
+      "actor": "Alice",
+      "label": "insert three todos",
+      "online": false,
+      "values": {
+        "Alice": [
+          {
+            "text": "Buy milk",
+            "author": null
+          },
+          {
+            "text": "Call Ada",
+            "author": null
+          },
+          {
+            "text": "Book flights",
+            "author": null
+          }
+        ],
+        "Bob": []
+      }
+    },
+    {
+      "caption": "They sync: Bob reads the same list.",
+      "online": true,
+      "values": {
+        "Alice": [
+          {
+            "text": "Buy milk",
+            "author": null
+          },
+          {
+            "text": "Call Ada",
+            "author": null
+          },
+          {
+            "text": "Book flights",
+            "author": null
+          }
+        ],
+        "Bob": [
+          {
+            "text": "Buy milk",
+            "author": null
+          },
+          {
+            "text": "Call Ada",
+            "author": null
+          },
+          {
+            "text": "Book flights",
+            "author": null
+          }
+        ]
+      },
+      "received": {
+        "Alice": [],
+        "Bob": [
+          {
+            "from": "Alice",
+            "label": "insert three todos",
+            "concurrent": false
+          }
+        ]
+      }
+    },
+    {
+      "caption": "Both go offline.",
+      "online": false,
+      "values": {
+        "Alice": [
+          {
+            "text": "Buy milk",
+            "author": null
+          },
+          {
+            "text": "Call Ada",
+            "author": null
+          },
+          {
+            "text": "Book flights",
+            "author": null
+          }
+        ],
+        "Bob": [
+          {
+            "text": "Buy milk",
+            "author": null
+          },
+          {
+            "text": "Call Ada",
+            "author": null
+          },
+          {
+            "text": "Book flights",
+            "author": null
+          }
+        ]
+      }
+    },
+    {
+      "caption": "Alice moves \"Book flights\" to the top.",
+      "actor": "Alice",
+      "label": "move \"Book flights\" to the top",
+      "online": false,
+      "values": {
+        "Alice": [
+          {
+            "text": "Book flights",
+            "author": null
+          },
+          {
+            "text": "Buy milk",
+            "author": null
+          },
+          {
+            "text": "Call Ada",
+            "author": null
+          }
+        ],
+        "Bob": [
+          {
+            "text": "Buy milk",
+            "author": null
+          },
+          {
+            "text": "Call Ada",
+            "author": null
+          },
+          {
+            "text": "Book flights",
+            "author": null
+          }
+        ]
+      }
+    },
+    {
+      "caption": "A moment later, Bob moves \"Book flights\" to the middle.",
+      "actor": "Bob",
+      "label": "move \"Book flights\" to the middle",
+      "online": false,
+      "values": {
+        "Alice": [
+          {
+            "text": "Book flights",
+            "author": null
+          },
+          {
+            "text": "Buy milk",
+            "author": null
+          },
+          {
+            "text": "Call Ada",
+            "author": null
+          }
+        ],
+        "Bob": [
+          {
+            "text": "Buy milk",
+            "author": null
+          },
+          {
+            "text": "Book flights",
+            "author": null
+          },
+          {
+            "text": "Call Ada",
+            "author": null
+          }
+        ]
+      }
+    },
+    {
+      "caption": "They meet again, and each one receives the move of the other.",
+      "online": true,
+      "values": {
+        "Alice": [
+          {
+            "text": "Buy milk",
+            "author": null
+          },
+          {
+            "text": "Book flights",
+            "author": null
+          },
+          {
+            "text": "Call Ada",
+            "author": null
+          }
+        ],
+        "Bob": [
+          {
+            "text": "Buy milk",
+            "author": null
+          },
+          {
+            "text": "Book flights",
+            "author": null
+          },
+          {
+            "text": "Call Ada",
+            "author": null
+          }
+        ]
+      },
+      "received": {
+        "Alice": [
+          {
+            "from": "Bob",
+            "label": "move \"Book flights\" to the middle",
+            "concurrent": true
+          }
+        ],
+        "Bob": [
+          {
+            "from": "Alice",
+            "label": "move \"Book flights\" to the top",
+            "concurrent": true
+          }
+        ]
+      },
+      "why": "Both moved the same item. It keeps one identity, so it lands in one place: the later move wins, on both peers. Nothing is duplicated."
+    }
+  ]
+}

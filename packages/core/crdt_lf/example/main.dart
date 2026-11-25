@@ -9,29 +9,33 @@ import 'dart:io';
 
 import 'package:crdt_lf/crdt_lf.dart';
 
-/// Lets two peers edit one text at the same time, and returns what each reads.
+/// Lets two peers write at the same spot of one text, with no connection, and
+/// returns what each reads after they merge.
 (String, String) mergeTwoPeers() {
   final alice = CRDTDocument(debugName: 'alice');
   final bob = CRDTDocument(debugName: 'bob');
 
-  // The same handler id on both peers: it is the same text.
+  // The same handler id: the same text.
   final aliceText = CRDTFugueTextHandler(alice, 'note');
   final bobText = CRDTFugueTextHandler(bob, 'note');
 
-  aliceText.insert(0, 'Hello world');
-  bob.importChanges(alice.exportChanges()); // Bob now reads "Hello world"
+  aliceText.insert(0, 'Hello');
+  bob.importChanges(alice.exportChanges());
 
-  // Both edit at the same time, with no connection.
-  aliceText.insert(0, 'Big ');
-  bobText.insert(11, '!');
+  // A conflict: both write after "Hello", offline.
+  aliceText.insert(5, ' World');
+  bobText.insert(5, ' Dart');
 
-  // They meet again and exchange what the other is missing.
+  // They meet again and exchange their changes.
   bob.importChanges(alice.exportChanges());
   alice.importChanges(bob.exportChanges());
 
+  // Each insert stays whole: never "Hello W Doarrltd".
+  // The peer ids pick which one comes first, so both
+  // print Hello World Dart, or both Hello Dart World.
   stdout
-    ..writeln(aliceText.value) // Big Hello world!
-    ..writeln(bobText.value); // Big Hello world!
+    ..writeln(aliceText.value)
+    ..writeln(bobText.value);
 
   final result = (aliceText.value, bobText.value);
   alice.dispose();

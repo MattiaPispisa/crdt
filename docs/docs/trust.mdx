@@ -1,0 +1,111 @@
+---
+title: Can you trust it?
+description: The promise every package keeps, and the tests that check it in CI.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+import CoverageTable from '@site/src/components/PackageCoverage';
+import MergeTrace from '@site/src/components/MergeTrace';
+
+# Can you trust it?
+
+A CRDT library makes one promise: peers that receive the same edits read the
+same data. The order of arrival, the delays and the time spent offline change
+nothing. This page shows how the packages check that promise. Most sections
+link to the tests or the CI setup behind them.
+
+## Coverage
+
+<CoverageTable />
+
+Each badge is the coverage of the package on the `main` branch, live from
+Codecov.
+
+## See a merge
+
+Two peers write at the same spot while offline:
+
+<MergeTrace id="fugue-same-spot" />
+
+## Every handler keeps the same contract
+
+Every handler of `crdt_lf` runs one shared suite: the
+[handler conformance suite](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf/test/handler/conformance/handler_conformance.dart).
+It makes random edits on several peers, with a fixed seed, and checks text,
+lists, maps, sets, registers and aggregates against the same guarantees. The
+last two rows apply to the handlers that publish deltas or support undo:
+
+| Guarantee | Test |
+| --- | --- |
+| Two peers that sync read what a replay from scratch reads | `two peers syncing every round agree with a replay` |
+| Random causal arrival orders give the same value | `every causal arrival order gives the same value` |
+| A snapshot plus the changes after it reads as the whole history | `a snapshot plus the changes after it reads as the history` |
+| A peer reloaded from a snapshot keeps converging | `edits after a reload converge with a full-history peer` |
+| Edits in a transaction leave the value the same edits leave one by one | `a walk in transactions leaves the value of the same walk` |
+| Time travel shows the value after each change | `each cursor reads the value recorded after that change` |
+| With deltas: the deltas of two peers editing at once rebuild each value | `the deltas of two peers editing at once rebuild each value` |
+| With undo: undo walks back every step, and redo walks forward again | `undo walks back every step, redo walks forward again` |
+
+### The suite is tested too
+
+A test that always passes proves nothing. So the suite has
+[a test of its own](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf/test/handler/conformance/conformance_test.dart):
+it runs the suite against handlers broken on purpose, each one in a single
+way. One forgets its value in a snapshot, one keeps a stale cache, one claims
+an order it does not have. Each of them must fail the guarantees it
+breaks.
+
+## Storage and editors keep a contract too
+
+- Every storage adapter (Hive, SQLite, Drift) passes the
+  [persistence conformance suite](./connectors/persistence/build-your-own.mdx#check-it-against-the-conformance-suite):
+  changes and snapshots come back byte for byte, and every handler survives a
+  trip through the change log and through a snapshot.
+- Every editor binding (the Flutter text field, the rich text field, Quill)
+  passes the [editor conformance suite](./connectors/flutter/editors/index.mdx):
+  local edits reach the handler, remote edits show and the caret keeps its
+  place in the text, and a random stream of edits keeps the editor and the
+  handler equal.
+
+Both suites are tested against broken implementations, like the handler suite.
+
+## On the VM and on the web
+
+The pure Dart packages also run their tests in Chrome, compiled to
+JavaScript ([`test_chrome`](https://github.com/MattiaPispisa/crdt/blob/main/melos.yaml)).
+The tests that need a real socket, SQLite, Drift or a subprocess run on the VM
+only. The Hive tests also run in the browser.
+
+## Code that runs
+
+Each [recipe](./recipes/index.mdx) has a test, named in
+[its manifest](https://github.com/MattiaPispisa/crdt/tree/main/packages/_internal/crdt_lf_recipes/recipes),
+that checks it in CI. The recipe code these pages show, and the quick starts of
+the package READMEs, are copied from those files, so they compile against the
+current API.
+
+## A release runs the tests
+
+Publishing a package first runs format, analyze, and the tests on the VM, in
+Flutter and in Chrome (the `pre` hook of
+[`melos.yaml`](https://github.com/MattiaPispisa/crdt/blob/main/melos.yaml)).
+
+<NextSteps
+  items={[
+    {
+      title: 'Two peers, one result',
+      to: '/docs/recipes/two-peers',
+      description: 'Two peers edit offline, then merge.',
+    },
+    {
+      title: 'Benchmarks',
+      to: '/docs/benchmarks',
+      description: 'How fast the hot paths are.',
+    },
+    {
+      title: 'Contributing',
+      to: '/docs/contributing',
+      description: 'The gate every change passes.',
+    },
+  ]}
+/>

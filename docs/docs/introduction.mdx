@@ -56,7 +56,8 @@ The merge rules depend on the kind of data. Text has to keep the letters of
 two people in a readable order. A set has to decide what happens when one user
 adds an item and another removes it at the same time. That is why this
 workspace has one **handler** per kind of data: you pick the handler that
-matches what your users edit.
+matches what your users edit. [Merge rules](./deep-dive/merge-rules/index.mdx)
+shows each rule at work, step by step, and why the result stays readable.
 
 ## What you get
 
@@ -84,6 +85,8 @@ browser.
 
 - **[Getting started](./getting-started.mdx)**: install the package and write
   your first document.
+- **[Can you trust it?](./trust.mdx)**: the promise every package keeps, the
+  tests that check it, and the coverage of each package.
 - **[Recipes](./recipes/index.mdx)**: complete setups to copy, each one run
   by a test: a note on disk, a Flutter screen, a server and its clients.
 - **[The document](./document/index.mdx)**: what a document holds, and where
@@ -92,8 +95,8 @@ browser.
   edit: text, rich text, lists, maps, nested data, aggregates.
 - **[Connectors](./connectors/index.mdx)**: plug the document into storage,
   Flutter and the network.
-- **[Deep dive](./deep-dive/index.mdx)**: how it works inside: time,
-  transactions, deltas, snapshots, the binary format.
+- **[Deep dive](./deep-dive/index.mdx)**: how it works inside: time, merge
+  rules, transactions, deltas, snapshots, the binary format.
 - **[Benchmarks](./benchmarks/index.mdx)**: how fast the hot paths are,
   package by package.
 - **[Migrations](./migrations/index.mdx)**: how to move to a new major version.
