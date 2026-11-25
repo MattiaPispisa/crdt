@@ -66,7 +66,7 @@ const config: Config = {
   plugins: [
     // the recipes of crdt_lf_recipes, read from the repository
     recipesPlugin,
-    // the published packages and their CI coverage minimum, from main.yaml
+    // the published packages the CI measures the coverage of, from main.yaml
     coveragePlugin,
     // offline, client-side search
     'docusaurus-plugin-pagefind',

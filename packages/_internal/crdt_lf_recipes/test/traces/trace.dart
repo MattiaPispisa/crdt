@@ -4,6 +4,7 @@
 import 'dart:convert';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 /// A piece of a value: some text, or one item, and the peer that wrote it.
 typedef TraceToken = ({String text, String? author});
@@ -45,7 +46,8 @@ final class Trace {
     _record(caption);
   }
 
-  /// Connects every peer, and sends to each one what it is missing.
+  /// Connects every peer, and sends to each one what it is missing. Fails when
+  /// the peers then read different values.
   void sync(String caption, {String? why}) {
     _online = true;
     final byId = {
@@ -74,6 +76,7 @@ final class Trace {
     for (final document in peers.values) {
       document.importChanges(byId.values.toList());
     }
+    _expectConverged(caption);
     _record(caption, received: received, why: why);
   }
 
@@ -87,6 +90,17 @@ final class Trace {
   void dispose() {
     for (final document in peers.values) {
       document.dispose();
+    }
+  }
+
+  void _expectConverged(String caption) {
+    final first = peers.keys.first;
+    for (final name in peers.keys.skip(1)) {
+      expect(
+        read(name),
+        read(first),
+        reason: 'after "$caption", $name and $first read different values',
+      );
     }
   }
 

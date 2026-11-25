@@ -50,7 +50,7 @@ function Badge({
   );
 }
 
-/** One row per published package: its live coverage and its CI minimum. */
+/** One row per published package, with its live coverage. */
 export default function CoverageTable(): ReactNode {
   const packages = usePackages();
   return (
@@ -59,7 +59,6 @@ export default function CoverageTable(): ReactNode {
         <tr>
           <th>Package</th>
           <th>Coverage on <code>main</code></th>
-          <th>CI fails under</th>
         </tr>
       </thead>
       <tbody>
@@ -73,7 +72,6 @@ export default function CoverageTable(): ReactNode {
             <td>
               <Badge pkg={pkg} />
             </td>
-            <td>{pkg.minCoverage}%</td>
           </tr>
         ))}
       </tbody>

@@ -23,10 +23,11 @@
 //
 // The docs site reads the same regions in `docs/plugins/recipes/source.ts`:
 // the two parsers follow the same rules. Each run also checks that every
-// `<Recipe>` and `<RecipeSnippet>` of a page in `docs/docs` names a recipe, a
-// file and a region that exist, and that every `<MergeTrace>` names a trace
-// in `crdt_lf_recipes/traces`: the site build fails on them too, but it runs
-// only on a deploy.
+// manifest names a `test` that exists. It also checks that every `<Recipe>` and
+// `<RecipeSnippet>` of a page in `docs/docs` names a recipe, a file and a
+// region that exist, and that every `<MergeTrace>` names a trace in
+// `crdt_lf_recipes/traces`: the site build fails on them too, but it runs only
+// on a deploy.
 import 'dart:io' as io;
 
 import 'package:path/path.dart' as path;
@@ -195,13 +196,21 @@ _Recipes _loadRecipes(String root) {
         ].join('\n');
       }
     }
-    recipes[map['id'] as String] = files;
+    final id = map['id'] as String;
+    final test = map['test'] as String?;
+    if (test == null) {
+      throw _RecipeError('Recipe "$id": no "test".');
+    }
+    if (!io.File(path.join(root, test)).existsSync()) {
+      throw _RecipeError('Recipe "$id": $test does not exist.');
+    }
+    recipes[id] = files;
     final variantOf = map['variantOf'] as String?;
     if (variantOf != null) {
-      variants[map['id'] as String] = variantOf;
+      variants[id] = variantOf;
     }
     if (map['variant'] != null) {
-      labelled.add(map['id'] as String);
+      labelled.add(id);
     }
   }
 

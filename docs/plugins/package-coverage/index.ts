@@ -5,13 +5,12 @@ import type { LoadContext, Plugin } from '@docusaurus/types';
 
 import type { PackageCoverage } from './types';
 
-// The CI workflow is the only place that sets a minimum: the site reads it.
+// The CI workflow lists the packages with a coverage job: the site reads it.
 const workflow = '.github/workflows/main.yaml';
 
 type Job = {
   with?: {
     working_directory?: string;
-    min_coverage?: number;
     package_name?: string;
   };
 };
@@ -26,7 +25,6 @@ function loadCoverage(repoRoot: string): PackageCoverage[] {
   return Object.values(jobs).flatMap(({ with: inputs }) => {
     if (
       inputs?.working_directory === undefined ||
-      inputs.min_coverage === undefined ||
       inputs.package_name === undefined
     ) {
       return [];
@@ -44,13 +42,7 @@ function loadCoverage(repoRoot: string): PackageCoverage[] {
           `name "${pubspec.name}" of ${packagePath}.`,
       );
     }
-    return [
-      {
-        name: pubspec.name,
-        path: packagePath,
-        minCoverage: inputs.min_coverage,
-      },
-    ];
+    return [{ name: pubspec.name, path: packagePath }];
   });
 }
 

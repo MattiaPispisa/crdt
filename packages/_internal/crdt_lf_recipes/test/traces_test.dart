@@ -6,9 +6,11 @@ library;
 
 import 'dart:io';
 
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'traces/scenarios.dart';
+import 'traces/trace.dart';
 
 const _update = 'fvm flutter test --update-goldens test/traces_test.dart';
 
@@ -31,6 +33,17 @@ void main() {
       expect(json, file.readAsStringSync(), reason: 'update it: $_update');
     });
   }
+
+  test('a sync fails when the peers read different values', () {
+    final trace = Trace(
+      kind: 'text',
+      peers: {'Alice': CRDTDocument(), 'Bob': CRDTDocument()},
+      read: (peer) => [(text: peer, author: null)],
+    );
+    addTearDown(trace.dispose);
+
+    expect(() => trace.sync('They sync.'), throwsA(isA<TestFailure>()));
+  });
 
   test('every file in traces/ has a scenario', () {
     final stale =
