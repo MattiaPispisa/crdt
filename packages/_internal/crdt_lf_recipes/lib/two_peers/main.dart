@@ -12,8 +12,8 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// returns what each reads after they merge.
 (String, String) mergeTwoPeers() {
   // #docregion merge
-  final alice = CRDTDocument();
-  final bob = CRDTDocument();
+  final alice = CRDTDocument(debugName: 'alice');
+  final bob = CRDTDocument(debugName: 'bob');
 
   // The same handler id: the same text.
   final aliceText = CRDTFugueTextHandler(alice, 'note');

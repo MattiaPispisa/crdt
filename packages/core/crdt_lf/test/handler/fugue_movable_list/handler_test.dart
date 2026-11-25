@@ -31,6 +31,35 @@ void main() {
   );
 
   group('CRDTFugueMovableListHandler', () {
+    test('operations expose their fields via toPayload', () {
+      final doc = CRDTDocument(
+        peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+      );
+      final list = CRDTFugueMovableListHandler<int>(
+        doc,
+        'list',
+        handlerType: 'ints',
+      )
+        ..insertAll(0, [1, 2])
+        ..move(0, 2)
+        ..update(0, 3)
+        ..delete(0);
+      final payloads = [for (final op in list.operations()) op.toPayload()];
+      final insertItems = payloads[0]['items'] as List;
+      final identity = (insertItems.first as Map)['identity'];
+
+      expect(payloads[0], containsPair('leftOrigin', 'null'));
+      expect(insertItems.map((item) => (item as Map)['value']), [1, 2]);
+      expect(insertItems.first, containsPair('position', isA<String>()));
+      expect(payloads[1], containsPair('identity', identity));
+      expect(payloads[1].keys, containsAll(['newPosition', 'rightOrigin']));
+      final second = (insertItems.last as Map)['identity'];
+      expect(payloads[2]['items'], [
+        {'identity': second, 'value': 3},
+      ]);
+      expect(payloads[3]['items'], [second]);
+    });
+
     test('value is frozen until the next change', () {
       final doc = CRDTDocument();
       final list = CRDTFugueMovableListHandler<int>(

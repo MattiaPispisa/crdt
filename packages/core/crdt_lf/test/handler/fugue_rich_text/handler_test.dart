@@ -143,6 +143,28 @@ void main() {
   }
 
   group('CRDTFugueRichTextHandler', () {
+    test('operations expose their fields via toPayload', () {
+      final doc = CRDTDocument();
+      final text = open(doc)
+        ..insert(0, 'abc')
+        ..format(0, 2, 'bold', true, expand: MarkExpand.none)
+        ..format(1, 2, 'italic', true)
+        ..insertEmbed(3, {'image': 'a.png'})
+        ..updateEmbed(3, {'image': 'b.png'});
+      final payloads = [for (final op in text.operations()) op.toPayload()];
+
+      expect(payloads[1], containsPair('key', 'bold'));
+      expect(payloads[1], containsPair('value', true));
+      expect(payloads[1]['start'], containsPair('side', 'before'));
+      expect(payloads[1]['end'], containsPair('side', 'after'));
+      expect(payloads[1]['end'], containsPair('id', isA<String>()));
+      // A mark that reaches the end of the text anchors to the text itself.
+      expect(payloads[2]['end'], {'side': 'text', 'id': null});
+      expect(payloads[3], containsPair('data', {'image': 'a.png'}));
+      expect(payloads[4], containsPair('element', payloads[3]['element']));
+      expect(payloads[4], containsPair('data', {'image': 'b.png'}));
+    });
+
     test('travels under its own handler type', () {
       expect(open(CRDTDocument()).handlerType, 'CRDTFugueRichTextHandler');
     });
@@ -1091,7 +1113,9 @@ void main() {
           );
           formatAndTakeBack(text, undo, 0, 2, 2);
 
-          final late = CRDTDocument(peerId: peerB);
+          // From the clock of `early`: in the same millisecond both would mint
+          // one id, and `doc` would take the insert for the format.
+          final late = CRDTDocument(peerId: peerB, initialClock: early.hlc);
           open(late).insert(0, 'xyz');
           late.exportChanges().forEach(doc.applyChange);
           expect(text.length, 7);

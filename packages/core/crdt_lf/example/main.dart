@@ -12,8 +12,8 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// Lets two peers write at the same spot of one text, with no connection, and
 /// returns what each reads after they merge.
 (String, String) mergeTwoPeers() {
-  final alice = CRDTDocument();
-  final bob = CRDTDocument();
+  final alice = CRDTDocument(debugName: 'alice');
+  final bob = CRDTDocument(debugName: 'bob');
 
   // The same handler id: the same text.
   final aliceText = CRDTFugueTextHandler(alice, 'note');

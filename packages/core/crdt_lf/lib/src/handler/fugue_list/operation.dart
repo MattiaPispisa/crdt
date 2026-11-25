@@ -100,6 +100,17 @@ class _FugueListInsertOperation<T> extends Operation
   final ValueCodec<T> valueCodec;
 
   @override
+  Map<String, dynamic> toPayload() => {
+        ...super.toPayload(),
+        'leftOrigin': leftOrigin.toString(),
+        'rightOrigin': rightOrigin.toString(),
+        'items': [
+          for (final item in items)
+            {'id': item.id.toString(), 'value': item.value},
+        ],
+      };
+
+  @override
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false)
       ..add(leftOrigin.toBytes())
@@ -181,6 +192,12 @@ class _FugueListDeleteOperation<T> extends Operation
   /// Items to delete
   @override
   final List<_FugueListDeleteItem> items;
+
+  @override
+  Map<String, dynamic> toPayload() => {
+        ...super.toPayload(),
+        'items': [for (final item in items) item.nodeID.toString()],
+      };
 
   @override
   Uint8List toBodyBytes() {
@@ -274,6 +291,15 @@ class _FugueListUpdateOperation<T> extends Operation
 
   /// Codec used to encode the updated values
   final ValueCodec<T> valueCodec;
+
+  @override
+  Map<String, dynamic> toPayload() => {
+        ...super.toPayload(),
+        'items': [
+          for (final item in items)
+            {'id': item.nodeID.toString(), 'value': item.value},
+        ],
+      };
 
   @override
   Uint8List toBodyBytes() {

@@ -1,6 +1,6 @@
 name: crdt_lf_devtools_extension
 description: DevTools extension for crdt_lf package
-version: 0.0.2
+version: 0.1.0
 publish_to: none
 
 environment:
@@ -12,24 +12,23 @@ dependencies:
     sdk: flutter
   
   # DevTools
-  devtools_extensions: ^0.3.1
-  devtools_app_shared: ^0.3.1
-  vm_service: 15.0.0
+  devtools_extensions: ^0.5.1
+  devtools_app_shared: ^0.5.1
+  vm_service: ^15.0.0
 
   # state management
   bloc: ^9.0.0
   flutter_bloc: ^9.1.0
   equatable: ^2.0.7
 
-  # presentation
-  graphview: ^1.2.0
-
   # extension for
-  crdt_lf: ">=4.0.0 <6.0.0"
+  crdt_lf: ^5.5.0
 dev_dependencies:
+  benchmark_infrastructure:
+    path: ../../_internal/benchmark_infrastructure
   flutter_test:
     sdk: flutter
-  test:
+  hlc_dart: ^1.2.0
   ws_lint:
     path: ../../_internal/ws_lint
 

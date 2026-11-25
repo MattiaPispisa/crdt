@@ -100,6 +100,21 @@ class _MovableListInsertOperation<T> extends Operation {
   final ValueCodec<T> valueCodec;
 
   @override
+  Map<String, dynamic> toPayload() => {
+        ...super.toPayload(),
+        'leftOrigin': leftOrigin.toString(),
+        'rightOrigin': rightOrigin.toString(),
+        'items': [
+          for (final item in items)
+            {
+              'identity': item.identityID.toString(),
+              'position': item.positionID.toString(),
+              'value': item.value,
+            },
+        ],
+      };
+
+  @override
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false)
       ..add(leftOrigin.toBytes())
@@ -198,6 +213,15 @@ class _MovableListMoveOperation<T> extends Operation {
   final FugueElementID rightOrigin;
 
   @override
+  Map<String, dynamic> toPayload() => {
+        ...super.toPayload(),
+        'identity': identityID.toString(),
+        'newPosition': newPositionID.toString(),
+        'leftOrigin': leftOrigin.toString(),
+        'rightOrigin': rightOrigin.toString(),
+      };
+
+  @override
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false)
       ..add(identityID.toBytes())
@@ -279,6 +303,15 @@ class _MovableListUpdateOperation<T> extends Operation {
   final ValueCodec<T> valueCodec;
 
   @override
+  Map<String, dynamic> toPayload() => {
+        ...super.toPayload(),
+        'items': [
+          for (final item in items)
+            {'identity': item.identityID.toString(), 'value': item.value},
+        ],
+      };
+
+  @override
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
     UVarint.write(items.length, out);
@@ -348,6 +381,12 @@ class _MovableListDeleteOperation<T> extends Operation {
   }
 
   final List<_MovableListDeleteItem> items;
+
+  @override
+  Map<String, dynamic> toPayload() => {
+        ...super.toPayload(),
+        'items': [for (final item in items) item.identityID.toString()],
+      };
 
   @override
   Uint8List toBodyBytes() {

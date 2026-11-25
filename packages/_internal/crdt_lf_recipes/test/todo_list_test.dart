@@ -141,7 +141,8 @@ void main() {
     });
 
     test('a toggle and a text edit on the same todo both survive', () {
-      addTodo(todosOf(alice), text: 'Buy milk');
+      final todo = addTodo(todosOf(alice), text: 'Buy milk');
+      expect(todo.done.debugName, 'todo "Buy milk" · done');
       exchange(alice, bob);
 
       // At the same time, on the same todo.

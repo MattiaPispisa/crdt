@@ -82,6 +82,9 @@ class _ExampleScaffoldState<S extends ExampleDocument>
   void initState() {
     super.initState();
     _sessions = widget.sessionsFactory();
+    for (final session in _sessions) {
+      session.document.debugName ??= '${widget.title} · ${session.label}';
+    }
     _states = [
       for (final session in _sessions) widget.stateBuilder(session.document),
     ];

@@ -29,6 +29,7 @@ jobs:
       crdt_socket_sync: ${{ steps.filter.outputs.crdt_socket_sync }}
       editor_conformance: ${{ steps.filter.outputs.editor_conformance }}
       crdt_lf_flutter: ${{ steps.filter.outputs.crdt_lf_flutter }}
+      crdt_lf_devtools_extension: ${{ steps.filter.outputs.crdt_lf_devtools_extension }}
       crdt_lf_quill: ${{ steps.filter.outputs.crdt_lf_quill }}
       crdt_socket_sync_dart_frog: ${{ steps.filter.outputs.crdt_socket_sync_dart_frog }}
       crdt_socket_sync_serverpod: ${{ steps.filter.outputs.crdt_socket_sync_serverpod }}
@@ -69,6 +70,8 @@ jobs:
               - 'packages/_internal/editor_conformance/**'
             crdt_lf_flutter:
               - 'packages/core/crdt_lf_flutter/**'
+            crdt_lf_devtools_extension:
+              - 'packages/core/crdt_lf_devtools_extension/**'
             crdt_lf_quill:
               - 'packages/adapters/text/crdt_lf_quill/**'
             crdt_socket_sync_dart_frog:
@@ -345,6 +348,43 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  crdt_lf_devtools_extension:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_lf_devtools_extension == 'true' }}
+    uses: ./.github/workflows/flutter_package.yaml
+    with:
+      working_directory: ./packages/core/crdt_lf_devtools_extension
+      min_coverage: 70
+      package_name: crdt_lf_devtools_extension
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # Only a real `--wasm` build catches the dart2wasm bug of the extension.
+  devtools_build:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_lf_devtools_extension == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📚 Git Checkout
+        uses: actions/checkout@v7
+      - name: 🐦 Setup Flutter
+        uses: kuhnroyal/flutter-fvm-config-action@v3
+        with:
+          setup: true
+          cache: true
+      - name: 📦 Setup melos and install dependencies
+        uses: bluefireteam/melos-action@v3
+      - name: 🧩 Build the DevTools extension
+        run: melos run devtools_build
+
   crdt_lf_quill:
     needs: changes
     if: >-
@@ -445,6 +485,8 @@ jobs:
       - crdt_socket_sync_serverpod_examples
       - editor_conformance
       - crdt_lf_flutter
+      - crdt_lf_devtools_extension
+      - devtools_build
       - crdt_lf_quill
       - crdt_lf_recipes
     steps:

@@ -38,5 +38,11 @@ void main() {
 
       expect(state.chapters, [c, a]);
     });
+
+    test('a debug name cuts a long title before an emoji, not inside it', () {
+      state.addChapter('${'x' * 19}😀 and more');
+
+      expect(state.chapters.last.debugName, 'chapter "${'x' * 19}…"');
+    });
   });
 }

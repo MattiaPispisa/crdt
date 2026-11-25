@@ -132,6 +132,7 @@ const sidebars: SidebarsConfig = {
       'benchmarks/hlc',
       'benchmarks/crdt_lf_flutter',
       'benchmarks/crdt_lf_quill',
+      'benchmarks/devtools',
     ]),
     section('Migrations', 'migrations/index', [
       {

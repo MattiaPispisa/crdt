@@ -1,3 +1,24 @@
+## [5.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.5.0/packages/core/crdt_lf)
+
+**Date:** --
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.4.0...crdt_lf-v5.5.0)
+
+### Added
+
+- `CRDTDocument.debugName`, `Handler.debugName` and `setHandlerDebugName`: local labels that
+  DevTools shows and searches in place of the ids.
+
+### Changed
+
+- The DevTools extension was rebuilt: state, changes with a DAG graph, time travel, storage and
+  events, read-only. See [DevTools](https://mattiapispisa.it/crdt/docs/deep-dive/devtools).
+
+### Fixed
+
+- In debug and JIT runs, every document stayed in memory for the life of the isolate: DevTools now
+  tracks a document until it is disposed or collected.
+
 ## [5.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.4.0/packages/core/crdt_lf)
 
 **Date:** 2026-11-14

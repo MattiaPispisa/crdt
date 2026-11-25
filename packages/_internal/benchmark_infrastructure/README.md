@@ -65,6 +65,10 @@ to the document, not to the cycle, and spread over a batch it can dominate —
 one text row read 253 µs with the cold cycle inside the batch and 60 µs with
 it outside.
 
+`AsyncFixedCycleTimedBenchmark.prepareCycle()` runs before each cycle and is
+not timed: put there the work that feeds a cycle, such as the edit of a remote
+peer.
+
 ```dart
 class MyGrowingBenchmark extends FixedCycleTimedBenchmark {
   MyGrowingBenchmark() : super('My benchmark name', measuredCycles: 200);
