@@ -14,6 +14,7 @@ import 'package:crdt_lf_devtools_extension/src/bridge/models/json.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../helpers/concurrent_peers.dart';
+import '../../helpers/settle.dart';
 
 // Counts the changes the app sends.
 class _CountingBridge extends InProcessBridge {
@@ -42,10 +43,6 @@ void main() {
     bridge.dispose();
     DevToolsBridge.reset();
   });
-
-  // The coalesced event (a microtask), then the gate (a zero timer).
-  Future<void> settle() =>
-      Future<void>.delayed(const Duration(milliseconds: 5));
 
   Future<ChangeLogCubit> cubitOf(CRDTDocument doc) async {
     final id =

@@ -12,6 +12,8 @@ import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/models/json.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../helpers/settle.dart';
+
 class _RecordingBridge extends InProcessBridge {
   final List<Json> values = [];
 
@@ -40,9 +42,6 @@ void main() {
     bridge.dispose();
     DevToolsBridge.reset();
   });
-
-  Future<void> settle() =>
-      Future<void>.delayed(const Duration(milliseconds: 5));
 
   test('loads the selected value and reloads on a change', () async {
     final doc = CRDTDocument(documentId: 'd');

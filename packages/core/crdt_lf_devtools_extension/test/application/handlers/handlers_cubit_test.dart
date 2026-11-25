@@ -11,6 +11,8 @@ import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../helpers/settle.dart';
+
 void main() {
   late InProcessBridge bridge;
   late CrdtLfClient client;
@@ -25,10 +27,6 @@ void main() {
     bridge.dispose();
     DevToolsBridge.reset();
   });
-
-  // The coalesced event (a microtask), then the gate (a zero timer).
-  Future<void> settle() =>
-      Future<void>.delayed(const Duration(milliseconds: 5));
 
   Future<int> trackedId() async => (await client.documents()).single.id;
 

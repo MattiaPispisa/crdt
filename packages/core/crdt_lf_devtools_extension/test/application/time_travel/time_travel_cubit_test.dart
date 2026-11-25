@@ -17,6 +17,7 @@ import 'package:crdt_lf_devtools_extension/src/bridge/models/json.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../helpers/concurrent_peers.dart';
+import '../../helpers/settle.dart';
 
 // Holds the first [method] call until [release] completes.
 class _HeldBridge extends InProcessBridge {
@@ -94,10 +95,6 @@ void main() {
     bridge.dispose();
     DevToolsBridge.reset();
   });
-
-  // The coalesced event (a microtask), then the gates (zero timers).
-  Future<void> settle() =>
-      Future<void>.delayed(const Duration(milliseconds: 5));
 
   Future<(int, TimeTravelCubit)> open(CRDTDocument doc) async {
     final id =
