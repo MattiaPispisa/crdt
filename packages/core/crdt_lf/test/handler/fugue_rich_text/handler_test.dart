@@ -1113,7 +1113,9 @@ void main() {
           );
           formatAndTakeBack(text, undo, 0, 2, 2);
 
-          final late = CRDTDocument(peerId: peerB);
+          // From the clock of `early`: in the same millisecond both would mint
+          // one id, and `doc` would take the insert for the format.
+          final late = CRDTDocument(peerId: peerB, initialClock: early.hlc);
           open(late).insert(0, 'xyz');
           late.exportChanges().forEach(doc.applyChange);
           expect(text.length, 7);
