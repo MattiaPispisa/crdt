@@ -37,7 +37,10 @@ abstract final class DevToolsBridge {
   /// A start of a running log or watch renews it, and so does a
   /// `historyState` or `changes` call. The app ends the work at its next
   /// event, call or change after the lease ends.
-  static Duration lease = const Duration(seconds: 30);
+  static const Duration lease = Duration(seconds: 30);
+
+  /// Makes the stopwatches of the leases; a test puts one whose time it moves.
+  static Stopwatch Function() stopwatch = Stopwatch.new;
 
   static int _nextId = 0;
 
@@ -153,7 +156,7 @@ abstract final class DevToolsBridge {
       case 'historyClose':
         final (tracked, _) = _resolve(params);
         // A stale id is a no-op: a newer `historyOpen` already ended it.
-        if (_intParam(params, 'session', -1) == tracked.historyId) {
+        if (_intParam(params, 'session', -1) == tracked.history?.id) {
           tracked.closeHistory();
         }
         return {};
@@ -564,10 +567,8 @@ abstract final class DevToolsBridge {
     final types = _orNull(() => view._types) ?? view._openTypes;
     final id = _nextSession++;
     tracked
-      ..history = session
-      ..historyId = id
-      ..newestHistoryId = id
-      ..historyIdle.reset();
+      ..history = _History(id, session)
+      ..newestHistoryId = id;
     _expiring.add(tracked.id);
     return {
       'session': id,
@@ -585,16 +586,17 @@ abstract final class DevToolsBridge {
     _Tracked tracked,
     Map<String, String> params,
   ) {
-    final session = tracked.history;
+    final history = tracked.history;
     final id = _intParam(params, 'session');
-    if (session == null || id != tracked.historyId) {
+    if (history == null || id != history.id) {
       throw ArgumentError.value(
         params['session'],
         'session',
         id < tracked.newestHistoryId ? 'Replaced' : 'Not open',
       );
     }
-    tracked.historyIdle.reset();
+    history.renew();
+    final session = history.session;
     final cursor = _intParam(params, 'cursor');
     if (cursor > session.length) {
       throw ArgumentError.value(
@@ -745,7 +747,7 @@ abstract final class DevToolsBridge {
       );
       _expiring.add(tracked.id);
     }
-    pages.idle.reset();
+    pages.renew();
     final (page, done) = pages.after(since, limit);
     if (done) tracked.pages = null;
     return (page, done);
@@ -877,7 +879,6 @@ final class _Tracked {
   _Tracked(this.id, CRDTDocument document)
       : document = WeakReference<CRDTDocument>(document),
         deltas = <String, _Lease>{},
-        historyIdle = Stopwatch()..start(),
         _types = <String, String>{};
 
   final int id;
@@ -902,15 +903,11 @@ final class _Tracked {
 
   final Map<String, _Lease> deltas;
 
-  HistorySession? history;
-
-  int? historyId;
+  _History? history;
 
   // Ids only grow, so a client that holds an older one learns that another
   // client took the document.
   int newestHistoryId = -1;
-
-  final Stopwatch historyIdle;
 
   _ChangePages? pages;
 
@@ -949,13 +946,8 @@ final class _Tracked {
   /// Ends the history session and the paging idle for a whole lease, and
   /// tells whether one of them is still open.
   bool expireIdle() {
-    if (history != null && historyIdle.elapsed >= DevToolsBridge.lease) {
-      closeHistory();
-    }
-    if (pages case final pages?
-        when pages.idle.elapsed >= DevToolsBridge.lease) {
-      this.pages = null;
-    }
+    if (history?.expired ?? false) closeHistory();
+    if (pages?.expired ?? false) pages = null;
     return history != null || pages != null;
   }
 
@@ -971,33 +963,44 @@ final class _Tracked {
   }
 
   void closeHistory() {
-    history?.dispose();
+    history?.session.dispose();
     history = null;
-    historyId = null;
   }
 }
 
-// DevTools can close without a stop call, and an IDE listening to the VM
-// keeps `_hasReceiver` true: a lease the tool must renew ends the work.
-final class _Lease {
-  _Lease(this._subscription) : _since = Stopwatch()..start();
-
-  final StreamSubscription<Object?> _subscription;
+// Work the app keeps for a client. DevTools can close without a stop call,
+// and an IDE listening to the VM keeps `_hasReceiver` true: a lease the tool
+// must renew ends the work.
+abstract base class _Leased {
+  _Leased() : _since = DevToolsBridge.stopwatch()..start();
 
   final Stopwatch _since;
 
   bool get expired => _since.elapsed >= DevToolsBridge.lease;
 
   void renew() => _since.reset();
+}
+
+final class _History extends _Leased {
+  _History(this.id, this.session);
+
+  final int id;
+
+  final HistorySession session;
+}
+
+final class _Lease extends _Leased {
+  _Lease(this._subscription);
+
+  final StreamSubscription<Object?> _subscription;
 
   void cancel() => unawaited(_subscription.cancel());
 }
 
-final class _ChangePages {
+final class _ChangePages extends _Leased {
   _ChangePages(this._sorted, {required this.changeCount})
       : _positions = <PeerId, List<int>>{},
-        _latest = VersionVector({}),
-        idle = Stopwatch()..start() {
+        _latest = VersionVector({}) {
     _index(0);
   }
 
@@ -1009,8 +1012,6 @@ final class _ChangePages {
   final VersionVector _latest;
 
   int changeCount;
-
-  final Stopwatch idle;
 
   void _index(int from) {
     for (final positions in _positions.values) {

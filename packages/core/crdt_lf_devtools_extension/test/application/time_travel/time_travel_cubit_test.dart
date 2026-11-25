@@ -17,6 +17,7 @@ import 'package:crdt_lf_devtools_extension/src/bridge/models/json.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../helpers/concurrent_peers.dart';
+import '../../helpers/fake_time.dart';
 import '../../helpers/settle.dart';
 
 // Holds the first [method] call until [release] completes.
@@ -195,27 +196,24 @@ void main() {
     expect(cubit.state.value!.value, 'a');
   });
 
-  test('a renewal that finds the session ended opens a new one', () async {
+  testOnFakeTime('a renewal that finds the session ended opens a new one', (
+    tester,
+  ) async {
     final doc = CRDTDocument(documentId: 'd');
     CRDTTextHandler(doc, 'text')
       ..insert(0, 'a')
       ..insert(1, 'b');
     final id = (await client.documents()).single.id;
-    final cubit = TimeTravelCubit(
-      ChangeMirror(client, id),
-      delay: Duration.zero,
-      valueDelay: Duration.zero,
-      renewEvery: const Duration(milliseconds: 50),
-    );
-    addTearDown(cubit.close);
-    await settle();
+    final cubit = TimeTravelCubit(ChangeMirror(client, id));
+    await tester.pump(const Duration(seconds: 1));
     cubit.moveTo(1);
     final ended = cubit.state.session!.session;
 
     await client.historyClose(id, ended);
-    await Future<void>.delayed(const Duration(milliseconds: 150));
+    await tester.pump(DevToolsBridge.lease);
     expect(cubit.state.session!.session, isNot(ended));
     expect(cubit.state.cursor, 1);
+    unawaited(cubit.close());
   });
 
   test('a resume opens at the cursor the user moved to meanwhile', () async {
@@ -329,7 +327,9 @@ void main() {
     expect(cubit.state.error, TimeTravelCubit.taken);
   });
 
-  test('a renewal answered after a reopen keeps the new session', () async {
+  testOnFakeTime('a renewal answered after a reopen keeps the new session', (
+    tester,
+  ) async {
     final doc = CRDTDocument(documentId: 'd');
     CRDTTextHandler(doc, 'text').insert(0, 'a');
     final release = Completer<void>();
@@ -337,25 +337,19 @@ void main() {
     addTearDown(held.dispose);
     final heldClient = CrdtLfClient(held);
     final id = (await heldClient.documents()).single.id;
-    final cubit = TimeTravelCubit(
-      ChangeMirror(heldClient, id),
-      delay: Duration.zero,
-      valueDelay: Duration.zero,
-      renewEvery: const Duration(milliseconds: 50),
-    );
-    addTearDown(cubit.close);
-    await settle();
+    final cubit = TimeTravelCubit(ChangeMirror(heldClient, id));
+    await tester.pump(const Duration(seconds: 1));
     // The first renewal waits; the reopen ends the session it renews.
-    while (!held.held) {
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-    }
-    await cubit.reopen();
-    await settle();
+    await tester.pump(DevToolsBridge.lease);
+    expect(held.held, isTrue);
+    unawaited(cubit.reopen());
+    await tester.pump(const Duration(seconds: 1));
     final reopened = cubit.state.session!.session;
 
     release.complete();
-    await settle();
+    await tester.pump(const Duration(seconds: 1));
     expect(cubit.state.session!.session, reopened);
+    unawaited(cubit.close());
   });
 
   test('a call on the session a reopen replaces resumes nothing', () async {
@@ -474,35 +468,21 @@ void main() {
     );
   });
 
-  test('renews the lease of its session while open', () async {
-    final lease = DevToolsBridge.lease;
-    // A wide margin over the renewal period: a slow machine can stall the
-    // timers for a while.
-    DevToolsBridge.lease = const Duration(seconds: 1);
-    addTearDown(() => DevToolsBridge.lease = lease);
+  testOnFakeTime('renews the lease of its session while open', (tester) async {
     final doc = CRDTDocument(documentId: 'd');
     final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
     final id = (await client.documents()).single.id;
-    final cubit = TimeTravelCubit(
-      ChangeMirror(client, id),
-      delay: Duration.zero,
-      valueDelay: Duration.zero,
-      renewEvery: const Duration(milliseconds: 50),
-    );
-    addTearDown(cubit.close);
-    await settle();
+    final cubit = TimeTravelCubit(ChangeMirror(client, id));
+    await tester.pump(const Duration(seconds: 1));
     final session = cubit.state.session!.session;
 
-    await Future<void>.delayed(const Duration(milliseconds: 1500));
+    await tester.pump(DevToolsBridge.lease * 3);
     // A change ends a session past its lease.
     text.insert(1, 'b');
+    expect(DevToolsBridge.held(doc).history, isTrue);
     expect(cubit.state.session!.session, session);
-    final state = await client.historyState(
-      id,
-      session: cubit.state.session!.session,
-      cursor: 1,
-    );
-    expect(state.cursor, 1);
+    unawaited(cubit.close());
+    await tester.pump(const Duration(seconds: 1));
   });
 
   test('reports the progress of the first sync', () async {

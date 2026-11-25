@@ -1,6 +1,8 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
+
 import 'package:crdt_lf/crdt_lf.dart';
 // The bridge is hidden from the public barrel on purpose.
 // ignore: implementation_imports
@@ -9,6 +11,7 @@ import 'package:crdt_lf_devtools_extension/src/application/deltas/delta_watch_cu
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../helpers/fake_time.dart';
 import '../../helpers/slow_bridge.dart';
 
 void main() {
@@ -31,7 +34,9 @@ void main() {
     return list.open.firstWhere((h) => h.id == handler).watched;
   }
 
-  test('a renewal never starts the watch again after a stop', () async {
+  testOnFakeTime('a renewal never starts the watch again after a stop', (
+    tester,
+  ) async {
     final doc = CRDTDocument();
     CRDTTextHandler(doc, 'text').insert(0, 'a');
     final id = (await client.documents()).single.id;
@@ -40,39 +45,33 @@ void main() {
       id,
       renewEvery: const Duration(milliseconds: 10),
     )..select('text');
-    addTearDown(cubit.close);
     await cubit.setWatching(watching: true);
     bridge.slow = 'watchStop';
 
-    await cubit.setWatching(watching: false);
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+    unawaited(cubit.setWatching(watching: false));
+    // Past the late answer, and past many renewals.
+    await tester.pump(const Duration(seconds: 1));
     expect(cubit.state.watching, isFalse);
     expect(await watched(id, 'text'), isFalse);
+    unawaited(cubit.close());
   });
 
-  test('renews the lease of the watch while watching', () async {
-    final lease = DevToolsBridge.lease;
-    // A wide margin over the renewal period: a slow machine can stall the
-    // timers for a while.
-    DevToolsBridge.lease = const Duration(seconds: 1);
-    addTearDown(() => DevToolsBridge.lease = lease);
+  testOnFakeTime('renews the lease of the watch while watching', (
+    tester,
+  ) async {
     final doc = CRDTDocument();
     final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
     final id = (await client.documents()).single.id;
-    final cubit = DeltaWatchCubit(
-      client,
-      id,
-      renewEvery: const Duration(milliseconds: 50),
-    )..select('text');
-    addTearDown(cubit.close);
+    final cubit = DeltaWatchCubit(client, id)..select('text');
 
     await cubit.setWatching(watching: true);
-    await Future<void>.delayed(const Duration(milliseconds: 1500));
+    await tester.pump(DevToolsBridge.lease * 3);
     final before = cubit.state.deltas.length;
     text.insert(0, 'b');
-    await pumpEventQueue();
+    await tester.pump();
     expect(cubit.state.deltas, hasLength(before + 1));
     expect(await watched(id, 'text'), isTrue);
+    unawaited(cubit.close());
   });
 
   test('a start answered after the selection came back is dropped', () async {
@@ -93,29 +92,25 @@ void main() {
     expect(await watched(id, 'text'), isFalse);
   });
 
-  test('a lease that ran out marks the deltas as missed', () async {
-    final lease = DevToolsBridge.lease;
-    DevToolsBridge.lease = const Duration(milliseconds: 100);
-    addTearDown(() => DevToolsBridge.lease = lease);
+  testOnFakeTime('a lease that ran out marks the deltas as missed', (
+    tester,
+  ) async {
     final doc = CRDTDocument();
     final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
     final id = (await client.documents()).single.id;
     final cubit = DeltaWatchCubit(
       client,
       id,
-      renewEvery: const Duration(milliseconds: 300),
+      renewEvery: DevToolsBridge.lease * 2,
     )..select('text');
-    addTearDown(cubit.close);
     await cubit.setWatching(watching: true);
 
-    await Future<void>.delayed(const Duration(milliseconds: 150));
+    await tester.pump(DevToolsBridge.lease);
     // The first delta after the lease: the app stops the watch on it.
     text.insert(1, 'b');
-    // The next renewal finds the work stopped: wait for it, not for a
-    // fixed time.
-    for (var i = 0; i < 100 && !cubit.state.missed; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 30));
-    }
+    await tester.pump();
+    expect(await watched(id, 'text'), isFalse);
+    await tester.pump(DevToolsBridge.lease);
     expect(cubit.state.missed, isTrue);
     expect(await watched(id, 'text'), isTrue);
 
@@ -123,6 +118,7 @@ void main() {
     expect(cubit.state.missed, isTrue);
     await cubit.setWatching(watching: true);
     expect(cubit.state.missed, isFalse);
+    unawaited(cubit.close());
   });
 
   test('watches one handler, newest first, and stops on select', () async {

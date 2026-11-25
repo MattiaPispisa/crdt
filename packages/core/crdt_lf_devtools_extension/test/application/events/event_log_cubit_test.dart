@@ -1,6 +1,8 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
+
 import 'package:crdt_lf/crdt_lf.dart';
 // The bridge is hidden from the public barrel on purpose.
 // ignore: implementation_imports
@@ -9,6 +11,7 @@ import 'package:crdt_lf_devtools_extension/src/application/events/event_log_cubi
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../helpers/fake_time.dart';
 import '../../helpers/slow_bridge.dart';
 
 void main() {
@@ -28,7 +31,9 @@ void main() {
 
   Future<bool> recording() async => (await client.documents()).single.recording;
 
-  test('a renewal never starts the log again after a stop', () async {
+  testOnFakeTime('a renewal never starts the log again after a stop', (
+    tester,
+  ) async {
     final doc = CRDTDocument();
     addTearDown(doc.dispose);
     final id = (await client.documents()).single.id;
@@ -37,63 +42,51 @@ void main() {
       id,
       renewEvery: const Duration(milliseconds: 10),
     );
-    addTearDown(cubit.close);
     await cubit.setRecording(recording: true);
     bridge.slow = 'eventsStop';
 
-    await cubit.setRecording(recording: false);
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+    unawaited(cubit.setRecording(recording: false));
+    // Past the late answer, and past many renewals.
+    await tester.pump(const Duration(seconds: 1));
     expect(cubit.state.recording, isFalse);
     expect(await recording(), isFalse);
+    unawaited(cubit.close());
   });
 
-  test('renews the lease of the log while recording', () async {
-    final lease = DevToolsBridge.lease;
-    // A wide margin over the renewal period: a slow machine can stall the
-    // timers for a while.
-    DevToolsBridge.lease = const Duration(seconds: 1);
-    addTearDown(() => DevToolsBridge.lease = lease);
+  testOnFakeTime('renews the lease of the log while recording', (tester) async {
     final doc = CRDTDocument();
     final text = CRDTTextHandler(doc, 'text');
     final id = (await client.documents()).single.id;
-    final cubit = EventLogCubit(
-      client,
-      id,
-      renewEvery: const Duration(milliseconds: 50),
-    );
-    addTearDown(cubit.close);
+    final cubit = EventLogCubit(client, id);
 
     await cubit.setRecording(recording: true);
-    await Future<void>.delayed(const Duration(milliseconds: 1500));
+    await tester.pump(DevToolsBridge.lease * 3);
     text.insert(0, 'a');
-    await pumpEventQueue();
+    await tester.pump();
     expect(cubit.state.events, hasLength(1));
     expect(await recording(), isTrue);
+    unawaited(cubit.close());
   });
 
-  test('a lease that ran out marks the events as missed', () async {
-    final lease = DevToolsBridge.lease;
-    DevToolsBridge.lease = const Duration(milliseconds: 100);
-    addTearDown(() => DevToolsBridge.lease = lease);
+  testOnFakeTime('a lease that ran out marks the events as missed', (
+    tester,
+  ) async {
     final doc = CRDTDocument();
     final text = CRDTTextHandler(doc, 'text');
     final id = (await client.documents()).single.id;
     final cubit = EventLogCubit(
       client,
       id,
-      renewEvery: const Duration(milliseconds: 300),
+      renewEvery: DevToolsBridge.lease * 2,
     );
-    addTearDown(cubit.close);
     await cubit.setRecording(recording: true);
 
-    await Future<void>.delayed(const Duration(milliseconds: 150));
+    await tester.pump(DevToolsBridge.lease);
     // The first event after the lease: the app stops the log on it.
     text.insert(0, 'a');
-    // The next renewal finds the work stopped: wait for it, not for a
-    // fixed time.
-    for (var i = 0; i < 100 && !cubit.state.missed; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 30));
-    }
+    await tester.pump();
+    expect(await recording(), isFalse);
+    await tester.pump(DevToolsBridge.lease);
     expect(cubit.state.missed, isTrue);
     expect(await recording(), isTrue);
 
@@ -101,6 +94,7 @@ void main() {
     expect(cubit.state.missed, isTrue);
     await cubit.setRecording(recording: true);
     expect(cubit.state.missed, isFalse);
+    unawaited(cubit.close());
   });
 
   test('records newest first, keeps the cap, clears and stops', () async {

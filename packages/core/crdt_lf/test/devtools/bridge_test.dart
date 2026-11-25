@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:typed_data';
 
+import 'package:clock/clock.dart';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/document/document.dart' show DevToolsBridge;
 import 'package:hlc_dart/hlc_dart.dart';
@@ -16,9 +17,15 @@ import '../helpers/pn_counter_handler.dart';
 void main() {
   group('DevToolsBridge', () {
     late List<(String, Map<String, Object?>)> events;
-    final lease = DevToolsBridge.lease;
+    // The time of the leases: it moves only through `elapse`.
+    late DateTime now;
+    void elapse(Duration time) => now = now.add(time);
+    // Most of a lease: two of them outlast one that nothing renewed.
+    const most = Duration(seconds: 20);
 
     setUp(() {
+      now = DateTime(2026);
+      DevToolsBridge.stopwatch = Clock(() => now).stopwatch;
       DevToolsBridge.reset();
       events = [];
       DevToolsBridge.onEvent = (kind, data) => events.add((kind, data));
@@ -26,7 +33,7 @@ void main() {
 
     tearDown(() {
       DevToolsBridge.onEvent = null;
-      DevToolsBridge.lease = lease;
+      DevToolsBridge.stopwatch = Stopwatch.new;
       DevToolsBridge.reset();
     });
 
@@ -868,6 +875,19 @@ void main() {
       await moves(undo.dispose);
     });
 
+    test('a close of an older session keeps the newest one', () {
+      final doc = CRDTDocument();
+      CRDTTextHandler(doc, 'text').insert(0, 'a');
+      final older = historyOpen(doc)['session'];
+      final newest = historyOpen(doc)['session'];
+
+      DevToolsBridge.call('historyClose', {
+        'doc': '${trackedId(doc)}',
+        'session': '$older',
+      });
+      expect(historyState(doc, newest, 1)['value'], 'a');
+    });
+
     test('every session before the newest one is replaced', () {
       final doc = CRDTDocument();
       CRDTTextHandler(doc, 'text').insert(0, 'a');
@@ -1212,11 +1232,11 @@ void main() {
       final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
       expect(text.value, 'a');
       final id = trackedId(doc);
-      DevToolsBridge.lease = Duration.zero;
       DevToolsBridge.call('eventsStart', {'doc': '$id'});
       DevToolsBridge.call('watchStart', {'doc': '$id', 'handler': 'text'});
       await pumpEventQueue();
 
+      elapse(DevToolsBridge.lease);
       events.clear();
       text.insert(1, 'b');
       await pumpEventQueue();
@@ -1231,15 +1251,14 @@ void main() {
       final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
       expect(text.value, 'a');
       final params = {'doc': '${trackedId(doc)}', 'handler': 'text'};
-      DevToolsBridge.lease = const Duration(seconds: 2);
-      // Two waits of 1.2 s: the lease holds only if the second start
-      // renewed it.
       for (var i = 0; i < 2; i++) {
         DevToolsBridge.call('eventsStart', params);
         DevToolsBridge.call('watchStart', params);
-        await Future<void>.delayed(const Duration(milliseconds: 1200));
+        elapse(most);
       }
 
+      // The reset a watch starts with.
+      await pumpEventQueue();
       events.clear();
       text.insert(1, 'b');
       await pumpEventQueue();
@@ -1247,10 +1266,7 @@ void main() {
       expect(posted('crdt_lf:devtools:delta'), hasLength(1));
     });
 
-    Future<void> runOut() => Future<void>.delayed(DevToolsBridge.lease * 1.5);
-
-    test('a change or a call ends an idle session and an idle paging',
-        () async {
+    test('a change or a call ends an idle session and an idle paging', () {
       for (final end in <void Function(CRDTTextHandler)>[
         (text) => text.insert(0, 'c'),
         (_) => documents(),
@@ -1263,12 +1279,11 @@ void main() {
         final paged = CRDTDocument()..importChanges(doc.exportChanges());
         final params = {'doc': '${trackedId(doc)}'};
         final pagedParams = {'doc': '${trackedId(paged)}', 'limit': '1'};
-        DevToolsBridge.lease = const Duration(milliseconds: 300);
         DevToolsBridge.call('historyOpen', params);
         DevToolsBridge.call('changes', pagedParams);
         // No receiver: a DevTools tab closed without its close call.
         DevToolsBridge.onEvent = null;
-        await runOut();
+        elapse(DevToolsBridge.lease);
         expect(DevToolsBridge.held(doc).history, isTrue);
         expect(DevToolsBridge.held(paged).paging, isTrue);
 
@@ -1278,28 +1293,24 @@ void main() {
       }
     });
 
-    test('a session opens on a document older than the lease', () async {
+    test('a session opens on a document older than the lease', () {
       final doc = CRDTDocument();
       CRDTTextHandler(doc, 'text').insert(0, 'a');
       final params = {'doc': '${trackedId(doc)}'};
-      DevToolsBridge.lease = const Duration(milliseconds: 300);
-      await runOut();
+      elapse(DevToolsBridge.lease);
 
       DevToolsBridge.call('historyOpen', params);
       expect(DevToolsBridge.held(doc).history, isTrue);
     });
 
-    test('a page renews the lease of its paging', () async {
+    test('a page renews the lease of its paging', () {
       final doc = CRDTDocument();
       final text = CRDTTextHandler(doc, 'text');
       for (var i = 0; i < 5; i++) {
         text.insert(i, 'x');
       }
       final id = '${trackedId(doc)}';
-      DevToolsBridge.lease = const Duration(seconds: 2);
       final held = <Change>[];
-      // Two waits of 1.2 s: the paging holds only if the second page
-      // renewed it.
       for (var i = 0; i < 2; i++) {
         held.addAll(
           decode(
@@ -1310,7 +1321,7 @@ void main() {
             }),
           ),
         );
-        await Future<void>.delayed(const Duration(milliseconds: 1200));
+        elapse(most);
       }
       documents();
       expect(DevToolsBridge.held(doc).paging, isTrue);
@@ -1330,13 +1341,12 @@ void main() {
       expect(DevToolsBridge.held(doc).watched, isEmpty);
     });
 
-    test('a historyState past the lease still renews its session', () async {
+    test('a historyState past the lease still renews its session', () {
       final doc = CRDTDocument();
       CRDTTextHandler(doc, 'text').insert(0, 'a');
       final params = {'doc': '${trackedId(doc)}'};
-      DevToolsBridge.lease = const Duration(milliseconds: 100);
       final session = DevToolsBridge.call('historyOpen', params)['session'];
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      elapse(DevToolsBridge.lease);
 
       // No change and no call in between: this call is the first to come.
       final state = DevToolsBridge.call('historyState', {
@@ -1348,16 +1358,13 @@ void main() {
       expect(state['value'], 'a');
     });
 
-    test('a historyState renews the lease of its session', () async {
+    test('a historyState renews the lease of its session', () {
       final doc = CRDTDocument();
       final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
-      DevToolsBridge.lease = const Duration(seconds: 2);
       final session = historyOpen(doc)['session'];
-      // Two waits of 1.2 s, each ended by a change, which ends a session
-      // past its lease: the session holds only if the first call renewed
-      // it.
       for (var i = 0; i < 2; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 1200));
+        elapse(most);
+        // A change ends a session past its lease.
         text.insert(text.value.length, 'b');
         expect(historyState(doc, session, 1)['value'], 'a');
       }
