@@ -68,8 +68,8 @@ import 'dart:io';
 
 import 'package:crdt_lf/crdt_lf.dart';
 
-final alice = CRDTDocument();
-final bob = CRDTDocument();
+final alice = CRDTDocument(debugName: 'alice');
+final bob = CRDTDocument(debugName: 'bob');
 
 // The same handler id on both peers: it is the same text.
 final aliceText = CRDTFugueTextHandler(alice, 'note');

@@ -51,6 +51,24 @@ class _FugueRichTextMarkOperation extends Operation {
   final _Anchor end;
 
   @override
+  Map<String, dynamic> toPayload() => {
+        ...super.toPayload(),
+        'key': key,
+        'value': value,
+        'start': _anchorPayload(start),
+        'end': _anchorPayload(end),
+      };
+
+  static Map<String, Object?> _anchorPayload(_Anchor anchor) => {
+        'side': switch (anchor.side) {
+          _Anchor.before => 'before',
+          _Anchor.after => 'after',
+          _ => 'text',
+        },
+        'id': anchor.id?.toString(),
+      };
+
+  @override
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
     _MarkBody.write(out, key: key, value: value, start: start, end: end);

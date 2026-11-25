@@ -118,6 +118,7 @@ class CRDTUndoManager {
     }
     document._ensureNotDisposed('CRDTUndoManager');
     document._undo.add(this);
+    DevToolsBridge._handlersChanged(document);
   }
 
   final CRDTDocument _document;
@@ -214,6 +215,7 @@ class CRDTUndoManager {
       }
     }
     _tracked.add(handler.id);
+    DevToolsBridge._handlersChanged(_document);
   }
 
   /// Stops recording the operations written on [handler].
@@ -223,6 +225,7 @@ class CRDTUndoManager {
   /// back, so [redo] skips the part of it that belongs to [handler].
   void untrack(Handler<dynamic> handler) {
     _tracked.remove(handler.id);
+    DevToolsBridge._handlersChanged(_document);
   }
 
   /// Takes back the last step, by writing the inverse of what it did.
@@ -316,6 +319,7 @@ class CRDTUndoManager {
     }
     _isDisposed = true;
     _document._undo.remove(this);
+    DevToolsBridge._handlersChanged(_document);
     _tracked.clear();
     _undoStack.clear();
     _redoStack.clear();
@@ -468,6 +472,7 @@ class CRDTUndoManager {
   }
 
   void _emitChange() {
+    DevToolsBridge._handlersChanged(_document);
     final controller = _changes;
     if (controller != null && !controller.isClosed) {
       controller.add(null);

@@ -4,13 +4,14 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/capabilities/data_requirements_tracker.dart';
 import 'package:crdt_lf/src/change/change_log.dart';
 import 'package:crdt_lf/src/compound/compound.dart';
-import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
+import 'package:crdt_lf/src/devtools/value_encoder.dart';
 import 'package:crdt_lf/src/document/document_clock.dart';
 import 'package:crdt_lf/src/document/document_events.dart';
 import 'package:crdt_lf/src/document/event_outbox.dart';
@@ -18,6 +19,7 @@ import 'package:crdt_lf/src/snapshot/blob_version.dart';
 import 'package:crdt_lf/src/snapshot/records.dart';
 import 'package:crdt_lf/src/snapshot/snapshot_state.dart';
 import 'package:crdt_lf/src/transaction/transaction_manager.dart';
+import 'package:crdt_lf/src/utils/binary_search.dart';
 import 'package:crdt_lf/src/utils/bytes.dart';
 import 'package:crdt_lf/src/utils/fnv1a.dart';
 import 'package:crdt_lf/src/utils/uuid.dart';
@@ -26,6 +28,7 @@ import 'package:hlc_dart/hlc_dart.dart';
 // [Handler] shares this library so the hooks the framework calls on it can stay
 // private. See the "Extension points" section of its documentation for the
 // members a custom handler is meant to override.
+part '../devtools/bridge.dart';
 part '../handler/handler.dart';
 part 'cache_coordinator.dart';
 part 'deletions_registry.dart';
@@ -52,7 +55,8 @@ abstract class BaseCRDTDocument {
   BaseCRDTDocument._(_HandlerRegistry registry)
       : _outbox = EventOutbox(),
         _registry = registry,
-        _cache = _CacheCoordinator(registry);
+        _cache = _CacheCoordinator(registry),
+        _handlerDebugNames = <String, String>{};
 
   bool _isDisposed = false;
 
@@ -61,6 +65,31 @@ abstract class BaseCRDTDocument {
   final _HandlerRegistry _registry;
 
   final _CacheCoordinator _cache;
+
+  final Map<String, String> _handlerDebugNames;
+
+  /// The debug name of the handler [handlerId]; `null` for none.
+  ///
+  /// {@template debug_name}
+  /// A debug name is a label for tools such as the DevTools extension. It
+  /// stays on this peer: it never goes into changes, snapshots or sync.
+  /// {@endtemplate}
+  String? handlerDebugName(String handlerId) => _handlerDebugNames[handlerId];
+
+  /// Sets the debug name of the handler [handlerId]; `null` removes it.
+  ///
+  /// Works by id, so the handler can be open, closed or deleted. See
+  /// [Handler.debugName].
+  void setHandlerDebugName(String handlerId, String? name) {
+    if (name == null) {
+      _handlerDebugNames.remove(handlerId);
+    } else {
+      _handlerDebugNames[handlerId] = name;
+    }
+    _debugNamesChanged();
+  }
+
+  void _debugNamesChanged() {}
 
   /// Who asked for the work running right now, stamped onto the delta events it
   /// produces; `null` outside any call that named one.
@@ -421,13 +450,16 @@ class CRDTDocument extends BaseCRDTDocument {
   ///   If not provided, defaults to [HybridLogicalClock.initialize] (clock
   ///   starting at zero). Use [HybridLogicalClock.now] to start from the
   ///   current physical time.
+  /// - [debugName]: see [CRDTDocument.debugName].
   ///
   /// {@macro document_example}
   CRDTDocument({
     PeerId? peerId,
     String? documentId,
     HybridLogicalClock? initialClock,
-  })  : _log = ChangeLog(),
+    String? debugName,
+  })  : _debugName = debugName,
+        _log = ChangeLog(),
         _documentId = documentId ?? generateUuid(),
         _clock = DocumentClock(
           peerId ?? PeerId.generate(),
@@ -444,8 +476,23 @@ class CRDTDocument extends BaseCRDTDocument {
       outbox: _outbox,
       transactions: _transactionManager,
     );
-    devtools.handleCreated(this);
+    DevToolsBridge._created(this);
   }
+
+  String? _debugName;
+
+  /// The debug name of this document; `null` for none.
+  ///
+  /// {@macro debug_name}
+  String? get debugName => _debugName;
+
+  set debugName(String? name) {
+    _debugName = name;
+    _debugNamesChanged();
+  }
+
+  @override
+  void _debugNamesChanged() => DevToolsBridge._renamed(this);
 
   final ChangeLog _log;
 
@@ -490,12 +537,15 @@ class CRDTDocument extends BaseCRDTDocument {
   void _registerHandler(Handler<dynamic> handler) {
     super._registerHandler(handler);
     _cache.track(handler);
+    DevToolsBridge._handlersChanged(this);
   }
 
   @override
   Handler<dynamic>? _unregisterHandler(String id) {
     _cache.forget(id);
-    return super._unregisterHandler(id);
+    final handler = super._unregisterHandler(id);
+    DevToolsBridge._handlersChanged(this);
+    return handler;
   }
 
   /// The unfolded changes the snapshot carries for [handlerId]; none when they
@@ -1011,7 +1061,7 @@ class CRDTDocument extends BaseCRDTDocument {
       // change passes exactly once, whatever order it arrived in.
       _dataRequirements.fold(change);
     }
-    devtools.postChangedEvent(this);
+    DevToolsBridge._changed(this);
 
     // Always advance the clock past the applied change.
     _clock.receive(change.hlc);
@@ -1150,6 +1200,7 @@ class CRDTDocument extends BaseCRDTDocument {
     // Before the prune, so a consumer mirroring this document writes the
     // snapshot down before it is told to drop the changes the snapshot covers.
     _snapshots.current = snapshot;
+    DevToolsBridge._snapshotChanged(this);
     _documentEvents.publish(
       DocumentSnapshotUpdated(
         snapshot: snapshot,
@@ -1229,6 +1280,7 @@ class CRDTDocument extends BaseCRDTDocument {
 
       // Before the prune, for the reason written down in [takeSnapshot].
       _snapshots.current = snapshot;
+      DevToolsBridge._snapshotChanged(this);
       _documentEvents.publish(
         DocumentSnapshotUpdated(
           snapshot: snapshot,
@@ -1282,6 +1334,7 @@ class CRDTDocument extends BaseCRDTDocument {
     // First: a record this build cannot read throws before anything moves.
     SnapshotRecords.unfoldedEntriesOf(snapshot);
     final merged = _snapshots.merge(snapshot);
+    DevToolsBridge._snapshotChanged(this);
     _dataRequirements.readRecord(snapshot);
     _clock.advancePast(snapshot.versionVector);
     _cache.bumpForSnapshot(snapshot);
@@ -1508,6 +1561,7 @@ class CRDTDocument extends BaseCRDTDocument {
   void _prune(VersionVector version) {
     _deletions.notePrune();
     final before = _log.frontiers;
+    final count = _log.changeCount;
     _log.prune(
       version,
       onPruned: _documentEvents.hasListener
@@ -1521,6 +1575,7 @@ class CRDTDocument extends BaseCRDTDocument {
               )
           : null,
     );
+    if (_log.changeCount != count) DevToolsBridge._pruned(this);
     // New frontiers: the caches were built on a history this document no
     // longer holds, so the next read rebuilds them from the snapshot.
     if (!setEquals(before, _log.frontiers)) {
@@ -1621,6 +1676,7 @@ class CRDTDocument extends BaseCRDTDocument {
     _flushOutbox();
     _documentEvents.close();
     _undo.dispose();
+    DevToolsBridge._disposed(this);
     super.dispose();
     _cache.clear();
   }

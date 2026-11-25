@@ -71,6 +71,7 @@ class _AsyncCountingBenchmark extends AsyncFixedCycleTimedBenchmark {
   _AsyncCountingBenchmark({
     super.settleCycles = 0,
     this.slowFirstBatch = false,
+    this.slowPrepare = false,
   }) : super(
           'async counting',
           warmupDuration: Duration.zero,
@@ -80,12 +81,21 @@ class _AsyncCountingBenchmark extends AsyncFixedCycleTimedBenchmark {
 
   final bool slowFirstBatch;
 
+  final bool slowPrepare;
+
+  int prepared = 0;
   int setups = 0;
   int runs = 0;
   int teardowns = 0;
 
   @override
   Future<void> setup() async => setups += 1;
+
+  @override
+  void prepareCycle() {
+    if (slowPrepare) sleep(const Duration(milliseconds: 20));
+    prepared += 1;
+  }
 
   @override
   Future<void> run() async {
@@ -165,6 +175,18 @@ void main() {
   });
 
   group('AsyncFixedCycleTimedBenchmark', () {
+    test('prepares each cycle outside the measure', () async {
+      final benchmark = _AsyncCountingBenchmark(
+        settleCycles: 2,
+        slowPrepare: true,
+      );
+
+      final score = await benchmark.measure();
+
+      expect(benchmark.prepared, benchmark.runs);
+      expect(score, lessThan(10000));
+    });
+
     test('awaits every cycle and tears down once', () async {
       final benchmark = _AsyncCountingBenchmark();
       await benchmark.measure();

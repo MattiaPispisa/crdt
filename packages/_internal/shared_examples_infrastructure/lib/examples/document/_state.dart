@@ -137,10 +137,12 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
 
   /// Appends a new chapter with the given [title].
   void addChapter(String title) {
+    final name = 'chapter "${_short(title)}"';
     final chapter =
         CRDTMapRefHandler(document, _newId())
-          ..setRef(_kTitleKey, _newText(title))
-          ..setRef(_kParagraphsKey, newRefList());
+          ..debugName = name
+          ..setRef(_kTitleKey, newText(title, '$name · title'))
+          ..setRef(_kParagraphsKey, newRefList('$name · paragraphs'));
     liveHandler.insertRef(liveHandler.children.length, chapter);
   }
 
@@ -152,10 +154,12 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
 
   /// Appends a new paragraph (with [text]) to [paragraphs].
   void addParagraph(CRDTMovableListRefHandler paragraphs, String text) {
+    final name = 'paragraph "${_short(text)}"';
     final paragraph =
         CRDTMapRefHandler(document, _newId())
-          ..setRef(_kTextKey, _newText(text))
-          ..setRef(_kBlocksKey, newRefList());
+          ..debugName = name
+          ..setRef(_kTextKey, newText(text, '$name · text'))
+          ..setRef(_kBlocksKey, newRefList('$name · blocks'));
     paragraphs.insertRef(paragraphs.children.length, paragraph);
   }
 
@@ -176,9 +180,12 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
 
   /// Appends a new block of the given [spec] kind to [blocks].
   void addBlock(CRDTMovableListRefHandler blocks, BlockSpec spec) {
-    final content = spec.createContent(this);
-    final block = CRDTMapRefHandler(document, _newId())
-      ..setRef(spec.kind, content);
+    final name = '${spec.kind} block';
+    final content = spec.createContent(this)..debugName = '$name · content';
+    final block =
+        CRDTMapRefHandler(document, _newId())
+          ..debugName = name
+          ..setRef(spec.kind, content);
     blocks.insertRef(blocks.children.length, block);
   }
 
@@ -193,10 +200,15 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
 
   /// Appends a new todo (with [text]) to [todoList].
   void addTodo(CRDTMovableListRefHandler todoList, String text) {
+    final name = 'todo "${_short(text)}"';
     final item =
         CRDTMapRefHandler(document, _newId())
-          ..setRef(_kTextKey, _newText(text))
-          ..setRef(_kDoneKey, _newDoneFlag(value: false));
+          ..debugName = name
+          ..setRef(_kTextKey, newText(text, '$name · text'))
+          ..setRef(
+            _kDoneKey,
+            _newDoneFlag(value: false)..debugName = '$name · done',
+          );
     todoList.insertRef(todoList.children.length, item);
   }
 
@@ -230,22 +242,29 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
 
   // --- Handler factories used by block specs ---
 
-  /// Creates a new collaborative text handler (optionally seeded with [value]).
-  CRDTFugueTextHandler newText([String value = '']) => _newText(value);
-
-  /// Creates a new (empty) movable list-of-references handler.
-  CRDTMovableListRefHandler newRefList() =>
-      CRDTMovableListRefHandler(document, _newId());
-
-  String _newId() => document.newHandlerId();
-
-  CRDTFugueTextHandler _newText(String value) {
-    final handler = CRDTFugueTextHandler(document, _newId());
+  /// Creates a new collaborative text handler, seeded with [value], with the
+  /// DevTools label [debugName].
+  CRDTFugueTextHandler newText([String value = '', String? debugName]) {
+    final handler = CRDTFugueTextHandler(document, _newId())
+      ..debugName = debugName;
     if (value.isNotEmpty) {
       handler.insert(0, value);
     }
     return handler;
   }
+
+  /// Creates a new (empty) movable list-of-references handler, with the
+  /// DevTools label [debugName].
+  CRDTMovableListRefHandler newRefList([String? debugName]) =>
+      CRDTMovableListRefHandler(document, _newId())..debugName = debugName;
+
+  String _newId() => document.newHandlerId();
+
+  /// The first characters of [text], for a debug name.
+  static String _short(String text) =>
+      text.length > 20
+          ? '${text.substring(0, RuneOffsets.snap(text, 20))}…'
+          : text;
 
   CRDTRegisterHandler<bool> _newDoneFlag({required bool value}) =>
       document.handler(_doneSpec, _newId())..set(value);

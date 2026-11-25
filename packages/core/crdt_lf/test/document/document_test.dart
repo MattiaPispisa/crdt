@@ -2227,6 +2227,29 @@ void main() {
     });
   });
 
+  group('debug names', () {
+    test('a document keeps its debug name', () {
+      final doc = CRDTDocument(debugName: 'notes');
+      expect(doc.debugName, 'notes');
+      doc.debugName = null;
+      expect(doc.debugName, isNull);
+      expect(CRDTDocument().debugName, isNull);
+    });
+
+    test('a handler debug name is kept by id, open or not', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..debugName = 'title';
+      expect(text.debugName, 'title');
+      expect(doc.handlerDebugName('text'), 'title');
+
+      doc.setHandlerDebugName('closed', 'body');
+      expect(doc.handlerDebugName('closed'), 'body');
+
+      text.debugName = null;
+      expect(doc.handlerDebugName('text'), isNull);
+    });
+  });
+
   group('handler caches', () {
     test('an untouched handler keeps its cache while others change', () {
       final source = CRDTDocument(peerId: PeerId.generate());

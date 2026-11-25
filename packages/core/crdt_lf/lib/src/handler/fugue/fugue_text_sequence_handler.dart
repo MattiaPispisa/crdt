@@ -284,6 +284,17 @@ class FugueTextInsertOperation extends Operation
   final List<FugueTextInsertItem> items;
 
   @override
+  Map<String, dynamic> toPayload() => {
+        ...super.toPayload(),
+        'leftOrigin': leftOrigin.toString(),
+        'rightOrigin': rightOrigin.toString(),
+        'items': [
+          for (final item in items)
+            {'id': item.id.toString(), 'text': item.text},
+        ],
+      };
+
+  @override
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false)
       ..add(leftOrigin.toBytes())
@@ -368,6 +379,12 @@ class FugueTextDeleteOperation extends Operation
 
   @override
   final List<FugueTextDeleteItem> items;
+
+  @override
+  Map<String, dynamic> toPayload() => {
+        ...super.toPayload(),
+        'items': [for (final item in items) item.nodeID.toString()],
+      };
 
   @override
   Uint8List toBodyBytes() {
@@ -455,6 +472,15 @@ class FugueTextUpdateOperation extends Operation
 
   @override
   final List<FugueTextUpdateItem> items;
+
+  @override
+  Map<String, dynamic> toPayload() => {
+        ...super.toPayload(),
+        'items': [
+          for (final item in items)
+            {'id': item.nodeID.toString(), 'text': item.text},
+        ],
+      };
 
   @override
   Uint8List toBodyBytes() {

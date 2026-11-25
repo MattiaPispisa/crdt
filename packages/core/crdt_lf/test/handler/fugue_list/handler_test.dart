@@ -25,6 +25,29 @@ void main() {
   );
 
   group('CRDTFugueListHandler', () {
+    test('operations expose their fields via toPayload', () {
+      final peer = PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d');
+      final doc = CRDTDocument(peerId: peer);
+      final list = CRDTFugueListHandler<int>(doc, 'list', handlerType: 'ints')
+        ..insertAll(0, [1, 2])
+        ..update(0, 3)
+        ..delete(1, 1);
+      final payloads = [for (final op in list.operations()) op.toPayload()];
+      final first = FugueElementID(peer, 0).toString();
+      final second = FugueElementID(peer, 1).toString();
+
+      expect(payloads[0], containsPair('leftOrigin', 'null'));
+      expect(payloads[0], containsPair('rightOrigin', 'null'));
+      expect(payloads[0]['items'], [
+        {'id': first, 'value': 1},
+        {'id': second, 'value': 2},
+      ]);
+      expect(payloads[1]['items'], [
+        {'id': first, 'value': 3},
+      ]);
+      expect(payloads[2]['items'], [second]);
+    });
+
     test('value is frozen until the next change', () {
       final doc = CRDTDocument();
       final list =

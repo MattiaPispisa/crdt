@@ -25,11 +25,16 @@ CRDTMapRefHandler addTodo(CRDTMovableListRefHandler todos, {String text = ''}) {
       todos.childRefs().length,
       CRDTMapRefHandler.spec,
     );
-    final title = todo.child('text', CRDTFugueTextHandler.spec);
+    final name = 'todo "$text"';
+    todo.debugName = name;
+    final title = todo.child('text', CRDTFugueTextHandler.spec)
+      ..debugName = '$name · text';
     if (text.isNotEmpty) {
       title.insert(0, text);
     }
-    todo.child('done', doneKind).set(false);
+    todo.child('done', doneKind)
+      ..debugName = '$name · done'
+      ..set(false);
     return todo;
   });
 }

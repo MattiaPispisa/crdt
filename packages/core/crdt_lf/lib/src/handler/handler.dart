@@ -117,6 +117,16 @@ abstract base class Handler<T>
   /// matching handler and nested handlers can be reconstructed remotely.
   String get handlerType => _instanceSpec.type;
 
+  /// The debug name of this handler; `null` for none.
+  ///
+  /// Kept by the document under [id], see
+  /// [BaseCRDTDocument.setHandlerDebugName].
+  ///
+  /// {@macro debug_name}
+  String? get debugName => doc.handlerDebugName(id);
+
+  set debugName(String? name) => doc.setHandlerDebugName(id, name);
+
   /// Whether this handler was deleted; see [BaseCRDTDocument.deleteHandler].
   bool get isDeleted => doc.isDeleted(id);
 

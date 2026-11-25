@@ -139,18 +139,24 @@ class SnapshotRecords {
   /// Decodes an entry produced by [encodeUnfoldedEntry].
   ///
   /// Throws a [FormatException] on an entry this build cannot read.
-  static List<Change> decodeUnfoldedEntry(Uint8List entry) {
+  static List<Change> decodeUnfoldedEntry(Uint8List entry) => [
+        for (final blob in _unfoldedBlobs(entry)) Change.fromBytes(blob),
+      ];
+
+  /// How many changes an entry produced by [encodeUnfoldedEntry] holds; no
+  /// change is decoded.
+  ///
+  /// Throws a [FormatException] on an entry this build cannot read.
+  static int unfoldedCountOf(Uint8List entry) => _unfoldedBlobs(entry).length;
+
+  static List<Uint8List> _unfoldedBlobs(Uint8List entry) {
     final offset = SnapshotBlob.read(
       entry,
       min: unfoldedEntryVersion,
       max: unfoldedEntryVersion,
       name: 'unfolded changes entry',
     ).offset;
-    return [
-      for (final blob
-          in ChangeCodec.decodeBlobs(Uint8List.sublistView(entry, offset)))
-        Change.fromBytes(blob),
-    ];
+    return ChangeCodec.decodeBlobs(Uint8List.sublistView(entry, offset));
   }
 
   /// What a merge of the concurrent snapshots [a] and [b] keeps for the

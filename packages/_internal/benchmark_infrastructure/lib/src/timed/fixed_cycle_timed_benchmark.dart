@@ -149,6 +149,10 @@ abstract class AsyncFixedCycleTimedBenchmark extends AsyncTimedBenchmarkBase {
   /// it built out of the measurement. Ignored when [setupPerBatch] is off.
   final int settleCycles;
 
+  /// Runs before each cycle, outside the measure: the work that feeds a cycle
+  /// and is not what the benchmark times.
+  void prepareCycle() {}
+
   // The loop below repeats FixedCycleTimedBenchmark.measure on purpose.
   // Sharing one helper over a `FutureOr<void> Function()` would put an await
   // inside the synchronous hot loop, and that await is part of what the
@@ -160,6 +164,7 @@ abstract class AsyncFixedCycleTimedBenchmark extends AsyncTimedBenchmarkBase {
 
       final warmup = Stopwatch()..start();
       while (warmup.elapsed < warmupDuration) {
+        prepareCycle();
         await run();
       }
 
@@ -168,15 +173,18 @@ abstract class AsyncFixedCycleTimedBenchmark extends AsyncTimedBenchmarkBase {
         if (setupPerBatch) {
           await setup();
           for (var cycle = 0; cycle < settleCycles; cycle += 1) {
+            prepareCycle();
             await run();
           }
         }
 
-        final stopwatch = Stopwatch()..start();
+        final stopwatch = Stopwatch();
         for (var cycle = 0; cycle < measuredCycles; cycle += 1) {
+          prepareCycle();
+          stopwatch.start();
           await run();
+          stopwatch.stop();
         }
-        stopwatch.stop();
 
         final perCycle = stopwatch.elapsedMicroseconds / measuredCycles;
         if (perCycle < best) {

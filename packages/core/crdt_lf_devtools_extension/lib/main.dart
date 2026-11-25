@@ -1,36 +1,21 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
-import 'package:crdt_lf_devtools_extension/src/presentation/ui/document_changes/document_changes.dart';
-import 'package:crdt_lf_devtools_extension/src/presentation/ui/widgets/bootstrap/bootstrap.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/vm_service_bridge.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/screen.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
 import 'package:devtools_extensions/devtools_extensions.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 void main() {
-  runApp(const CrdtLfDevToolsExtension());
-}
-
-class CrdtLfDevToolsExtension extends StatelessWidget {
-  const CrdtLfDevToolsExtension({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const DevToolsExtension(child: CrdtLfExtensionBody());
-  }
-}
-
-class CrdtLfExtensionBody extends StatelessWidget {
-  const CrdtLfExtensionBody({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+  runApp(
+    DevToolsExtension(
+      child: CrdtLfScreen(
+        bridge: VmServiceBridge(),
+        // A closure: `extensionManager` is set in the initState of
+        // `DevToolsExtension`, after `main` builds this tree.
+        copier: TextCopier((text) => extensionManager.copyToClipboard(text)),
       ),
-      home: const Bootstrap(child: Scaffold(body: DocumentChangesWidget())),
-    );
-  }
+    ),
+  );
 }
