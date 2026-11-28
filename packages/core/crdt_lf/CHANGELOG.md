@@ -8,6 +8,8 @@
 
 - `CRDTDocument.debugName`, `Handler.debugName` and `setHandlerDebugName`: local labels that
   DevTools shows and searches in place of the ids.
+- The `crdt-lf-app-setup` agent skill: `dart run skills@ get --package crdt_lf` installs it in
+  your coding agent. See [Getting started](https://mattiapispisa.it/crdt/docs/getting-started). [234](https://github.com/MattiaPispisa/crdt/issues/234)
 
 ### Changed
 

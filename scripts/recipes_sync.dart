@@ -18,6 +18,8 @@
 // whole file there, without the region markers. That is how the `example/`
 // of a package shows a recipe on pub.dev.
 //
+// A `SKILL.md` that a package ships in `skills/` takes the same markers.
+//
 // With `--check` it writes nothing, and fails when a README or a copy differs
 // from its recipe: CI runs it that way.
 //
@@ -73,7 +75,7 @@ void main(List<String> args) {
       }
     }
 
-    for (final readme in _readmes(root)) {
+    for (final readme in _markdownFiles(root)) {
       final before = readme.readAsStringSync();
       final after = before.replaceAllMapped(_block, (match) {
         final id = match[1]!;
@@ -288,13 +290,18 @@ void _checkPages(String root, Map<String, Map<String, _Source>> recipes) {
   }
 }
 
-/// Every README of the repository, outside build and tool folders.
-Iterable<io.File> _readmes(String root) {
+/// Every README of the repository, and every `SKILL.md` a package ships,
+/// outside build and tool folders.
+Iterable<io.File> _markdownFiles(String root) {
   const skipped = {'build', 'node_modules', '.dart_tool', '.git', '.fvm'};
   return io.Directory(root)
       .listSync(recursive: true, followLinks: false)
       .whereType<io.File>()
-      .where((file) => path.basename(file.path) == 'README.md')
+      .where(
+        (file) =>
+            path.basename(file.path) == 'README.md' ||
+            path.basename(file.path) == 'SKILL.md',
+      )
       .where(
         (file) => !path
             .split(path.relative(file.path, from: root))

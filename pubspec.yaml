@@ -9,4 +9,5 @@ dev_dependencies:
   melos: ^6.3.2
   path: ^1.9.0
   pub_semver: ^2.1.4
+  skills_lint: 0.5.3+1
   yaml: ^3.1.3
