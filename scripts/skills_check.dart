@@ -21,10 +21,12 @@ import 'dart:io' as io;
 import 'package:path/path.dart' as path;
 import 'package:skills_lint/skills_lint.dart';
 
+import 'fs.dart';
 import 'logs.dart';
 import 'process.dart';
+import 'workspace.dart';
 
-const _pagesDir = 'docs/docs';
+final _pagesDir = docsDir(['docs']);
 
 /// Names of Flutter, Dart and third-party packages that a skill may quote.
 /// Each one is checked by hand: keep the list short.
@@ -49,8 +51,11 @@ final _headingId = RegExp(r'\{#([\w-]+)\}\s*$');
 final _identifier = RegExp(r'\b[A-Za-z_]\w*\b');
 
 Future<void> main() async {
-  final root = io.Directory.current.path;
-  final directories = _skillDirectories(root);
+  final directories = [
+    for (final package in packages())
+      if (io.Directory(path.join(package.dir.path, 'skills')).existsSync())
+        path.join(package.dir.path, 'skills'),
+  ];
   if (directories.isEmpty) {
     logger.info('No package ships skills.');
     return;
@@ -73,11 +78,10 @@ Future<void> main() async {
         severity: AnalysisSeverity.error,
       ),
     },
-    customRules: [_DocsLinkRule(root), _ApiNameRule(root)],
+    customRules: [_DocsLinkRule(), _ApiNameRule()],
   );
   if (!valid) {
-    io.stderr.writeln('The skills have errors.');
-    badExit();
+    await badExit('The skills have errors.');
   }
   logger.info('Every skill passes ✅');
 }
@@ -96,7 +100,7 @@ Future<void> main() async {
 /// [Undo](https://mattiapispisa.it/crdt/docs/document#undo)
 /// ```
 class _DocsLinkRule extends SkillRule {
-  _DocsLinkRule(String root) : _pages = _readPages(root);
+  _DocsLinkRule() : _pages = _readPages();
 
   final Map<String, Set<String>> _pages;
 
@@ -116,7 +120,7 @@ class _DocsLinkRule extends SkillRule {
       final anchor = match[2];
       final String message;
       if (anchors == null) {
-        message = 'No page "$route" in $_pagesDir.';
+        message = 'No page "$route" in ${relativeToRoot(_pagesDir.path)}.';
       } else if (anchor != null && !anchors.contains(anchor)) {
         message = 'The page "$route" has no heading "#$anchor".';
       } else {
@@ -149,7 +153,7 @@ class _DocsLinkRule extends SkillRule {
 /// Each part of a dotted name is checked on its own: the rule finds a name
 /// that does not exist, not a member on the wrong class.
 class _ApiNameRule extends SkillRule {
-  _ApiNameRule(String root) : _names = _declaredNames(root);
+  _ApiNameRule() : _names = _declaredNames();
 
   final Set<String> _names;
 
@@ -208,36 +212,19 @@ ValidationError _error(
   );
 }
 
-/// The `skills/` folder of every package that has one.
-List<String> _skillDirectories(String root) {
-  return io.Directory(path.join(root, 'packages'))
-      .listSync(recursive: true, followLinks: false)
-      .whereType<io.Directory>()
-      .where((dir) => path.basename(dir.path) == 'skills')
-      .where((dir) {
-        final package = dir.parent.path;
-        final parts = path.split(path.relative(package, from: root));
-        return io.File(path.join(package, 'pubspec.yaml')).existsSync() &&
-            !parts.any((part) => part.startsWith('.') || part == 'build');
-      })
-      .map((dir) => dir.path)
-      .toList()
-    ..sort();
-}
-
 /// The route of every page of the docs site, relative to `/docs/`, with the
 /// anchors of its headings.
-Map<String, Set<String>> _readPages(String root) {
-  final dir = path.join(root, _pagesDir);
+Map<String, Set<String>> _readPages() {
   final pages = <String, Set<String>>{};
-  final files = io.Directory(dir)
-      .listSync(recursive: true)
-      .whereType<io.File>()
-      .where((file) => file.path.endsWith('.md') || file.path.endsWith('.mdx'))
-      // A file that starts with `_` is a partial, not a page.
-      .where((file) => !path.basename(file.path).startsWith('_'));
+  final markdown = files(
+    _pagesDir,
+    (file) =>
+        (file.path.endsWith('.md') || file.path.endsWith('.mdx')) &&
+        // A file that starts with `_` is a partial, not a page.
+        !path.basename(file.path).startsWith('_'),
+  );
 
-  for (final file in files) {
+  for (final file in markdown) {
     final text = file.readAsStringSync();
     final slug = _slug.firstMatch(_frontMatter.firstMatch(text)?[1] ?? '');
     final String route;
@@ -245,7 +232,7 @@ Map<String, Set<String>> _readPages(String root) {
       route = _trimSlashes(slug[1]!);
     } else {
       final relative =
-          path.withoutExtension(path.relative(file.path, from: dir));
+          path.withoutExtension(path.relative(file.path, from: _pagesDir.path));
       final segments = path.split(relative);
       if (segments.last == 'index') {
         segments.removeLast();
@@ -277,17 +264,13 @@ String _anchor(String heading) {
 
 /// Every identifier in the `lib/` of the packages that are published or
 /// shown in the docs.
-Set<String> _declaredNames(String root) {
+Set<String> _declaredNames() {
   final names = <String>{};
-  final libs = io.Directory(path.join(root, 'packages'))
-      .listSync(recursive: true, followLinks: false)
-      .whereType<io.File>()
-      .where((file) => file.path.endsWith('.dart'))
-      .where((file) {
-    final parts = path.split(path.relative(file.path, from: root));
-    return parts.contains('lib') &&
-        !parts.contains('_internal') &&
-        !parts.any((part) => part.startsWith('.') || part == 'build');
+  final libs = files(packagesDir(), (file) {
+    final parts = path.split(relativeToRoot(file.path));
+    return file.path.endsWith('.dart') &&
+        parts.contains('lib') &&
+        !parts.contains('_internal');
   });
   for (final file in libs) {
     names.addAll(

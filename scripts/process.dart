@@ -1,36 +1,48 @@
+import 'dart:async';
 import 'dart:io' as io;
 
-int _bad = 1;
+import 'logs.dart';
 
-/// Installs node dependencies in [workingDir], streaming output to the console.
+/// A failure that the script reports with its [message] alone.
+class ScriptException implements Exception {
+  ScriptException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+/// Logs [message], waits until the logger writes it, and exits with code 1.
+Future<Never> badExit(
+  String message, {
+  Object? error,
+  StackTrace? stackTrace,
+}) async {
+  logger.error(message, error: error, stackTrace: stackTrace);
+  await logger.close();
+  io.exit(1);
+}
+
+/// Runs [action], and exits with [error] when it throws.
 ///
-/// When [ci] is `true`, uses `npm ci` (clean, reproducible install from the
-/// lockfile, intended for CI) instead of `npm i`.
-Future<StreamedResult> npmI({
-  io.Directory? workingDir,
-  bool ci = false,
-}) {
-  return runStreamed(
-    'npm',
-    [
-      if (ci) 'ci' else 'i',
-    ],
-    workingDir: workingDir,
-  );
+/// A [ScriptException] exits with its own message.
+Future<void> step({
+  required FutureOr<void> Function() action,
+  required String error,
+}) async {
+  try {
+    await action();
+  } on ScriptException catch (exception) {
+    await badExit(exception.message);
+  } catch (exception, stackTrace) {
+    await badExit(error, error: exception, stackTrace: stackTrace);
+  }
 }
 
-/// Runs `npm run build` in [workingDir], streaming output to the console.
-Future<StreamedResult> npmRunBuild({io.Directory? workingDir}) {
-  return runStreamed(
-    'npm',
-    ['run', 'build'],
-    workingDir: workingDir,
-  );
-}
-
-/// Starts [executable] with [arguments] in [workingDir], inheriting stdio so
-/// the process output streams live to the console, and resolves once it exits.
-Future<StreamedResult> runStreamed(
+/// Runs [executable] with its output on the console, and throws a
+/// [ScriptException] when it exits with a code other than 0.
+Future<void> run(
   String executable,
   List<String> arguments, {
   io.Directory? workingDir,
@@ -41,23 +53,10 @@ Future<StreamedResult> runStreamed(
     workingDirectory: workingDir?.path,
     mode: io.ProcessStartMode.inheritStdio,
   );
-  return StreamedResult(await process.exitCode);
-}
-
-Never badExit() {
-  io.exit(_bad);
-}
-
-/// Result of a streamed process started with [runStreamed].
-///
-/// Exposes the same `isOk` / `isNotOk` checks one would use on an
-/// [io.ProcessResult], since [runStreamed] inherits stdio and therefore does
-/// not capture stdout/stderr.
-class StreamedResult {
-  StreamedResult(this.exitCode);
-
-  final int exitCode;
-
-  bool get isNotOk => exitCode == _bad;
-  bool get isOk => !isNotOk;
+  final exitCode = await process.exitCode;
+  if (exitCode != 0) {
+    throw ScriptException(
+      '`$executable ${arguments.join(' ')}` failed (exit code: $exitCode)',
+    );
+  }
 }

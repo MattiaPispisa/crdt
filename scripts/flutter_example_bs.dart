@@ -1,10 +1,12 @@
-import 'dart:io';
+import 'dart:io' as io;
+
+import 'package:path/path.dart' as path;
+import 'package:yaml/yaml.dart' as yaml;
 
 import 'fs.dart';
 import 'logs.dart';
 import 'process.dart';
 import 'web_icons.dart';
-import 'yaml.dart';
 
 /// Bootstraps the Flutter example apps: copies the shared workspace assets
 /// into the crdt_lf example and generates the `generated.dart` version files
@@ -12,90 +14,74 @@ import 'yaml.dart';
 ///
 /// Run as the `melos bootstrap` post hook, mirroring what `docs_bs` does for
 /// the documentation site.
-void main() {
+Future<void> main() async {
+  final crdtLfExample = crdtLfDir(['flutter_example']);
+  final clientExample =
+      packagesDir(['core', 'crdt_socket_sync', 'client_example']);
+  final greyhoundClient = appsDir(['greyhound_markdown', 'client']);
+
   // crdt_lf flutter_example bundles the shared workspace assets (logo, ...).
   logger
     ..info('Bootstrapping examples...')
     ..info('Copy assets');
-  try {
-    assetsDir().copySync(
-      to: crdtLfFlutterExampleDir(subParts: ['assets']),
-      logger: logger,
-    );
-    assetsDir().copySync(
-      to: greyhoundMarkdownDir(subParts: ['assets']),
-      logger: logger,
-    );
-  } catch (error) {
-    logger.error(
-      'Unable to copy assets',
-      error: error,
-    );
-    badExit();
-  }
+  await step(
+    action: () {
+      for (final app in [crdtLfExample, greyhoundClient]) {
+        assetsDir().copySync(
+          to: io.Directory(path.join(app.path, 'assets')),
+          logger: logger,
+        );
+      }
+    },
+    error: 'Unable to copy assets',
+  );
 
   // The web build serves its icons from `web/`, outside the Flutter asset
   // bundle, so they are rendered from the shared logo instead of copied.
   logger.info('Generating greyhound_markdown web icons...');
-  try {
-    generateWebIcons(
-      source: greyhoundLogo(),
-      webDir: greyhoundMarkdownDir(subParts: ['web']),
+  await step(
+    action: () => generateWebIcons(
+      source: io.File(
+        path.join(assetsDir(['images']).path, 'greyhound_markdown_logo.png'),
+      ),
+      webDir: io.Directory(path.join(greyhoundClient.path, 'web')),
       // The plate under the maskable icons — the only ones that cannot be
       // transparent. ColorScheme.fromSeed(seedColor: Colors.teal).surface, so
       // the launcher shows the app's own light surface.
       background: 0xF4FBF8,
       logger: logger,
-    );
-  } catch (error) {
-    logger.error(
-      'Unable to generate web icons',
-      error: error,
-    );
-    badExit();
-  }
+    ),
+    error: 'Unable to generate web icons',
+  );
 
   logger.info('Generating example version files...');
-  try {
-    // crdt_lf example shows the crdt_lf version.
-    _generateVersions(
-      pubspecLock: crdtLfExamplePubspecLock(),
-      output: File(
-        crdtLfFlutterExampleDir(subParts: ['lib', 'generated.dart']).path,
-      ),
-      packages: const {'crdt_lf', 'crdt_lf_flutter'},
-    );
-    // crdt_socket_sync client_example shows both the socket and crdt_lf
-    // versions.
-    _generateVersions(
-      pubspecLock: clientExamplePubspecLock(),
-      output: File(
-        clientExampleDir(subParts: ['lib', 'generated.dart']).path,
-      ),
-      packages: const {'crdt_socket_sync', 'crdt_lf', 'crdt_lf_flutter'},
-    );
-  } catch (error) {
-    logger.error(
-      'Unable to generate version files',
-      error: error,
-    );
-    badExit();
-  }
+  await step(
+    action: () {
+      _generateVersions(
+        app: crdtLfExample,
+        packages: const {'crdt_lf', 'crdt_lf_flutter'},
+      );
+      _generateVersions(
+        app: clientExample,
+        packages: const {'crdt_socket_sync', 'crdt_lf', 'crdt_lf_flutter'},
+      );
+    },
+    error: 'Unable to generate version files',
+  );
 
   logger.info('examples ready ✅');
 }
 
-/// Writes a `generated.dart` at [output] exposing each package version as a
-/// top-level `<package>_version` string, read from [pubspecLock].
-///
-/// [packages] is the set of package names to emit
-/// (e.g. `{'crdt_socket_sync', 'crdt_lf'}`).
+/// Writes the `lib/generated.dart` of [app], exposing the version of each of
+/// [packages] as a top-level `<package>_version` string, read from the
+/// `pubspec.lock` of [app].
 void _generateVersions({
-  required File pubspecLock,
-  required File output,
+  required io.Directory app,
   required Set<String> packages,
 }) {
-  final reader = YamlReader(pubspecLock)..initSync();
+  final lock = io.File(path.join(app.path, 'pubspec.lock'));
+  final locked = (yaml.loadYaml(lock.readAsStringSync())
+      as yaml.YamlMap)['packages'] as yaml.YamlMap;
 
   final code = StringBuffer()
     ..writeln('// GENERATED CODE - DO NOT MODIFY BY HAND')
@@ -105,8 +91,10 @@ void _generateVersions({
     )
     ..writeln();
   for (final package in packages) {
-    code.writeln("String ${package}_version = '${reader.version(package)}';");
+    final version = (locked[package] as yaml.YamlMap)['version'] as String;
+    code.writeln("String ${package}_version = '$version';");
   }
 
-  output.writeAsStringSync(code.toString());
+  io.File(path.join(app.path, 'lib', 'generated.dart'))
+      .writeAsStringSync(code.toString());
 }

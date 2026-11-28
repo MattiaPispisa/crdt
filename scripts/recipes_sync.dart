@@ -35,12 +35,12 @@ import 'dart:io' as io;
 import 'package:path/path.dart' as path;
 import 'package:yaml/yaml.dart' as yaml;
 
+import 'fs.dart';
 import 'logs.dart';
 import 'process.dart';
 
-const _recipesDir = 'packages/_internal/crdt_lf_recipes/recipes';
-const _tracesDir = 'packages/_internal/crdt_lf_recipes/traces';
-const _pagesDir = 'docs/docs';
+final _recipesDir = packagesDir(['_internal', 'crdt_lf_recipes', 'recipes']);
+final _tracesDir = packagesDir(['_internal', 'crdt_lf_recipes', 'traces']);
 
 final _block = RegExp(
   r'<!-- recipe:([\w-]+)/([^#\s]+)(?:#([\w,-]+))? -->\n.*?<!-- /recipe -->',
@@ -53,89 +53,79 @@ final _attribute = RegExp(r'(\w+)="([^"]*)"');
 final _marker = RegExp(r'^\s*//\s*#(docregion|enddocregion)\s+(\S+)\s*$');
 final _licenseLine = RegExp('^// (Copyright|SPDX-License-Identifier)');
 
-void main(List<String> args) {
+Future<void> main(List<String> args) {
   final check = args.contains('--check');
-  final root = io.Directory.current.path;
 
-  try {
-    final loaded = _loadRecipes(root);
-    final recipes = loaded.files;
-    final changed = <String>[];
+  return step(
+    action: () {
+      final loaded = _loadRecipes();
+      final recipes = loaded.files;
+      final changed = <String>[];
 
-    _checkPages(root, recipes);
+      _checkPages(recipes);
 
-    void write(io.File file, String after) {
-      final before = file.existsSync() ? file.readAsStringSync() : null;
-      if (after == before) {
+      void write(io.File file, String after) {
+        final before = file.existsSync() ? file.readAsStringSync() : null;
+        if (after == before) {
+          return;
+        }
+        changed.add(relativeToRoot(file.path));
+        if (!check) {
+          file.writeAsStringSync(after);
+        }
+      }
+
+      for (final readme in _markdownFiles()) {
+        final before = readme.readAsStringSync();
+        final after = before.replaceAllMapped(_block, (match) {
+          final id = match[1]!;
+          final file = match[2]!;
+          final region = match[3];
+          final source = recipes[id]?[file];
+          final readmePath = relativeToRoot(readme.path);
+          if (source == null) {
+            throw ScriptException(
+              '$readmePath: no file "$file" in recipe "$id".',
+            );
+          }
+          final code = region == null
+              ? source.code
+              : region.split(',').map((name) {
+                  final code = source.regions[name];
+                  if (code == null) {
+                    throw ScriptException(
+                      '$readmePath: recipe "$id", file '
+                      '"$file" has no region "$name".',
+                    );
+                  }
+                  return code;
+                }).join('\n\n');
+          final marker = region == null ? '$id/$file' : '$id/$file#$region';
+          return '<!-- recipe:$marker -->\n'
+              '```${source.language}\n$code\n```\n'
+              '<!-- /recipe -->';
+        });
+        write(readme, after);
+      }
+
+      for (final copy in loaded.copies.entries) {
+        write(io.File(path.join(rootPath, copy.key)), copy.value);
+      }
+
+      if (changed.isEmpty) {
+        logger.info('Every README and copy matches its recipes ✅');
         return;
       }
-      changed.add(path.relative(file.path, from: root));
-      if (!check) {
-        file.writeAsStringSync(after);
+      if (check) {
+        throw ScriptException(
+          'These files differ from their recipes. '
+          'Run `melos run recipes_sync`:\n${changed.join('\n')}',
+        );
       }
-    }
-
-    for (final readme in _markdownFiles(root)) {
-      final before = readme.readAsStringSync();
-      final after = before.replaceAllMapped(_block, (match) {
-        final id = match[1]!;
-        final file = match[2]!;
-        final region = match[3];
-        final source = recipes[id]?[file];
-        if (source == null) {
-          throw _RecipeError(
-            '${path.relative(readme.path)}: no file "$file" in recipe "$id".',
-          );
-        }
-        final code = region == null
-            ? source.code
-            : region.split(',').map((name) {
-                final code = source.regions[name];
-                if (code == null) {
-                  throw _RecipeError(
-                    '${path.relative(readme.path)}: recipe "$id", file '
-                    '"$file" has no region "$name".',
-                  );
-                }
-                return code;
-              }).join('\n\n');
-        final marker = region == null ? '$id/$file' : '$id/$file#$region';
-        return '<!-- recipe:$marker -->\n'
-            '```${source.language}\n$code\n```\n'
-            '<!-- /recipe -->';
-      });
-      write(readme, after);
-    }
-
-    for (final copy in loaded.copies.entries) {
-      write(io.File(path.join(root, copy.key)), copy.value);
-    }
-
-    if (changed.isEmpty) {
-      logger.info('Every README and copy matches its recipes ✅');
-      return;
-    }
-    if (check) {
-      // Straight to stderr: the logger writes asynchronously, and the exit
-      // would drop the message.
-      io.stderr.writeln(
-        'These files differ from their recipes. '
-        'Run `melos run recipes_sync`:\n${changed.join('\n')}',
-      );
-      badExit();
-    }
-    logger.info('Updated:\n${changed.join('\n')}');
-  } on _RecipeError catch (error) {
-    io.stderr.writeln(error.message);
-    badExit();
-  }
-}
-
-/// A recipe file, or a README marker, that does not hold together.
-class _RecipeError implements Exception {
-  _RecipeError(this.message);
-
-  final String message;
+      logger.info('Updated:\n${changed.join('\n')}');
+    },
+    error: 'Unable to sync the recipes',
+  );
 }
 
 class _Source {
@@ -160,12 +150,12 @@ class _Recipes {
   final Map<String, String> copies;
 }
 
-_Recipes _loadRecipes(String root) {
+_Recipes _loadRecipes() {
   final recipes = <String, Map<String, _Source>>{};
   final copies = <String, String>{};
   final variants = <String, String>{};
   final labelled = <String>{};
-  final manifests = io.Directory(path.join(root, _recipesDir))
+  final manifests = _recipesDir
       .listSync()
       .whereType<io.File>()
       .where((file) => file.path.endsWith('.yaml'));
@@ -176,7 +166,7 @@ _Recipes _loadRecipes(String root) {
     for (final entry in (map['files'] as yaml.YamlList).cast<yaml.YamlMap>()) {
       final filePath = entry['path'] as String;
       final source = _readSource(
-        io.File(path.join(root, filePath)).readAsStringSync(),
+        io.File(path.join(rootPath, filePath)).readAsStringSync(),
         language: path.extension(filePath).replaceFirst('.', ''),
         name: filePath,
       );
@@ -201,10 +191,10 @@ _Recipes _loadRecipes(String root) {
     final id = map['id'] as String;
     final test = map['test'] as String?;
     if (test == null) {
-      throw _RecipeError('Recipe "$id": no "test".');
+      throw ScriptException('Recipe "$id": no "test".');
     }
-    if (!io.File(path.join(root, test)).existsSync()) {
-      throw _RecipeError('Recipe "$id": $test does not exist.');
+    if (!io.File(path.join(rootPath, test)).existsSync()) {
+      throw ScriptException('Recipe "$id": $test does not exist.');
     }
     recipes[id] = files;
     final variantOf = map['variantOf'] as String?;
@@ -222,14 +212,16 @@ _Recipes _loadRecipes(String root) {
     final id = variant.key;
     final page = variant.value;
     if (!recipes.containsKey(page)) {
-      throw _RecipeError('Recipe "$id": no recipe "$page" to be a variant of.');
+      throw ScriptException(
+        'Recipe "$id": no recipe "$page" to be a variant of.',
+      );
     }
     if (variants.containsKey(page)) {
-      throw _RecipeError('Recipe "$id": "$page" is a variant itself.');
+      throw ScriptException('Recipe "$id": "$page" is a variant itself.');
     }
     for (final recipe in [id, page]) {
       if (!labelled.contains(recipe)) {
-        throw _RecipeError('Recipe "$recipe": a variant needs a "variant".');
+        throw ScriptException('Recipe "$recipe": a variant needs a "variant".');
       }
     }
   }
@@ -238,16 +230,13 @@ _Recipes _loadRecipes(String root) {
 
 /// Fails when a page of the docs site shows a recipe, a file, a region or a
 /// trace that does not exist.
-void _checkPages(String root, Map<String, Map<String, _Source>> recipes) {
+void _checkPages(Map<String, Map<String, _Source>> recipes) {
   final problems = <String>[];
-  final pages = io.Directory(path.join(root, _pagesDir))
-      .listSync(recursive: true)
-      .whereType<io.File>()
-      .where((file) => file.path.endsWith('.mdx'));
+  final pages = files(docsDir(['docs']), (file) => file.path.endsWith('.mdx'));
 
   for (final page in pages) {
     final text = page.readAsStringSync();
-    final name = path.relative(page.path, from: root);
+    final name = relativeToRoot(page.path);
 
     for (final match in _recipeTag.allMatches(text)) {
       if (!recipes.containsKey(match[1])) {
@@ -256,9 +245,10 @@ void _checkPages(String root, Map<String, Map<String, _Source>> recipes) {
     }
 
     for (final match in _traceTag.allMatches(text)) {
-      final trace = path.join(root, _tracesDir, '${match[1]}.json');
+      final trace = path.join(_tracesDir.path, '${match[1]}.json');
       if (!io.File(trace).existsSync()) {
-        problems.add('$name: no trace "${match[1]}" in $_tracesDir.');
+        final dir = relativeToRoot(_tracesDir.path);
+        problems.add('$name: no trace "${match[1]}" in $dir.');
       }
     }
 
@@ -286,27 +276,14 @@ void _checkPages(String root, Map<String, Map<String, _Source>> recipes) {
   }
 
   if (problems.isNotEmpty) {
-    throw _RecipeError(problems.join('\n'));
+    throw ScriptException(problems.join('\n'));
   }
 }
 
-/// Every README of the repository, and every `SKILL.md` a package ships,
-/// outside build and tool folders.
-Iterable<io.File> _markdownFiles(String root) {
-  const skipped = {'build', 'node_modules', '.dart_tool', '.git', '.fvm'};
-  return io.Directory(root)
-      .listSync(recursive: true, followLinks: false)
-      .whereType<io.File>()
-      .where(
-        (file) =>
-            path.basename(file.path) == 'README.md' ||
-            path.basename(file.path) == 'SKILL.md',
-      )
-      .where(
-        (file) => !path
-            .split(path.relative(file.path, from: root))
-            .any((part) => skipped.contains(part) || part == '.claude'),
-      );
+/// Every README of the repository, and every `SKILL.md` a package ships.
+Iterable<io.File> _markdownFiles() {
+  const names = {'README.md', 'SKILL.md'};
+  return files(rootDir(), (file) => names.contains(path.basename(file.path)));
 }
 
 _Source _readSource(
@@ -331,13 +308,13 @@ _Source _readSource(
       final regionName = match[2]!;
       if (match[1] == 'docregion') {
         if (open.containsKey(regionName) || regions.containsKey(regionName)) {
-          throw _RecipeError('$name: region "$regionName" opens twice.');
+          throw ScriptException('$name: region "$regionName" opens twice.');
         }
         open[regionName] = [];
       } else {
         final body = open.remove(regionName);
         if (body == null) {
-          throw _RecipeError('$name: region "$regionName" never opened.');
+          throw ScriptException('$name: region "$regionName" never opened.');
         }
         regions[regionName] = _dedent(_trimBlank(_collapseBlank(body)));
       }
@@ -349,7 +326,7 @@ _Source _readSource(
     }
   }
   if (open.isNotEmpty) {
-    throw _RecipeError('$name: region "${open.keys.first}" never closes.');
+    throw ScriptException('$name: region "${open.keys.first}" never closes.');
   }
   return _Source(
     language,

@@ -2,125 +2,155 @@ import 'dart:io' as io;
 
 import 'package:path/path.dart' as path;
 import 'package:pub_semver/pub_semver.dart';
+import 'package:yaml/yaml.dart' as yaml;
 
 import 'fs.dart';
 import 'logs.dart';
 import 'process.dart';
-import 'yaml.dart';
+import 'workspace.dart';
 
 /// Propagates the cross-package "references" block (Apps + Packages lists)
-/// into every published package README and the greyhound app README, then
-/// cuts a documentation release for each published package (build-number
-/// `+1` bump + a CHANGELOG stanza).
+/// into every published package README and every app README, then cuts a
+/// documentation release for each published package (build-number `+1` bump
+/// + a CHANGELOG stanza).
+///
+/// The published packages and the apps are read from the workspace: a
+/// package is published when `melos publish` would publish it, an app is a
+/// folder of `apps/`, described by the first paragraph of its README.
 ///
 /// Run from the repo root: `dart run scripts/update_references.dart`
 /// (or `melos run update_references`).
-void main() {
-  logger.info('Building pub-name → directory map');
-  final pubNameToDir = _pubNameToDir();
+Future<void> main() {
+  return step(
+    action: () {
+      final repository = repositoryUrl();
+      final published = packages().where((p) => p.isPublished).toList()
+        ..sort(_coreFirst);
+      final apps = _apps(repository);
 
-  logger.info('Updating package READMEs and cutting documentation releases');
-  for (final pubName in _packagePubNames) {
-    final dir = pubNameToDir[pubName];
-    if (dir == null) {
-      logger.error('No package directory found for "$pubName"');
-      badExit();
-    }
-    final packageDir = packagesDir(subParts: dir);
+      logger
+          .info('Updating package READMEs and cutting documentation releases');
+      for (final package in published) {
+        _updateReadme(
+          io.File(path.join(package.dir.path, 'README.md')),
+          _buildBlock(apps, published, excludePackage: package.name),
+        );
+        _cutDocumentationRelease(package, repository);
+      }
 
-    _updateReadme(
-      io.File(path.join(packageDir.path, 'README.md')),
-      _buildBlock(excludePubName: pubName),
-    );
+      logger.info('Updating app READMEs');
+      for (final app in apps) {
+        _updateReadme(
+          app.readme,
+          _buildBlock(apps, published, excludeApp: app.name),
+        );
+      }
 
-    _cutDocumentationRelease(
-      pubName: pubName,
-      dir: dir,
-      pubspec: io.File(path.join(packageDir.path, 'pubspec.yaml')),
-      changelog: io.File(path.join(packageDir.path, 'CHANGELOG.md')),
-    );
-  }
-
-  logger.info('Updating greyhound_markdown app README');
-  final appDir = appsDir(subParts: ['greyhound_markdown']);
-  _updateReadme(
-    io.File(path.join(appDir.path, 'README.md')),
-    // The app is itself the only Apps entry, so exclude it; the section is
-    // then empty and dropped, leaving just the Packages list.
-    _buildBlock(excludeAppName: 'greyhound_markdown'),
+      logger.info('Done ✅');
+    },
+    error: 'Unable to update the references',
   );
+}
 
-  logger.info('Done ✅');
+/// The packages of `packages/core` first, then the others, each group by
+/// path.
+int _coreFirst(Package a, Package b) {
+  int group(Package package) =>
+      package.repoPath.startsWith('packages/core/') ? 0 : 1;
+  final byGroup = group(a).compareTo(group(b));
+  return byGroup != 0 ? byGroup : a.repoPath.compareTo(b.repoPath);
 }
 
 /// An app entry rendered under the `## Apps` heading.
-class _AppRef {
-  const _AppRef({
+class _App {
+  const _App({
     required this.name,
     required this.url,
     required this.description,
+    required this.readme,
   });
 
   final String name;
   final String url;
   final String description;
+  final io.File readme;
 }
 
-/// Canonical Apps references, mirrored from the `app_packages_references`
-/// snippet in `.vscode/github.code-snippets`.
-const _apps = <_AppRef>[
-  _AppRef(
-    name: 'greyhound_markdown',
-    url: 'https://github.com/MattiaPispisa/crdt/tree/main/apps/'
-        'greyhound_markdown',
-    description: 'Real-time collaborative markdown editor built on crdt_lf',
-  ),
-];
+/// Every folder of `apps/`, sorted by name.
+List<_App> _apps(String repository) {
+  final dirs = appsDir()
+      .listSync()
+      .whereType<io.Directory>()
+      .where((dir) => !isSkipped(dir))
+      .toList()
+    ..sort((a, b) => a.path.compareTo(b.path));
 
-/// Canonical Packages references (pub.dev names), in snippet order. These are
-/// exactly the packages published to pub.dev.
-const _packagePubNames = <String>[
-  'crdt_lf',
-  'crdt_socket_sync',
-  'crdt_lf_flutter',
-  'crdt_lf_quill',
-  'hlc_dart',
-  'crdt_lf_persistence',
-  'crdt_lf_hive',
-  'crdt_lf_drift',
-  'crdt_lf_sqlite',
-  'crdt_socket_sync_dart_frog',
-  'crdt_socket_sync_serverpod',
-];
+  return [
+    for (final dir in dirs) _app(dir, repository),
+  ];
+}
 
-/// Maps every package's pub.dev name to its path segments relative to
-/// `packages/` (e.g. `['core', 'crdt_lf']`, `['adapters', 'persistence',
-/// 'drift']`).
-Map<String, List<String>> _pubNameToDir() {
-  final map = <String, List<String>>{};
-
-  for (final dir in packageDirs()) {
-    final pubspec = io.File(path.join(dir.path, 'pubspec.yaml'));
-    final name = YamlReader(pubspec).stringOrNull('name');
-    if (name != null) {
-      map[name] = path.split(path.relative(dir.path, from: packagesDir().path));
-    }
+_App _app(io.Directory dir, String repository) {
+  final name = path.basename(dir.path);
+  final readme = io.File(path.join(dir.path, 'README.md'));
+  if (!readme.existsSync()) {
+    throw ScriptException('README not found: ${relativeToRoot(readme.path)}');
   }
-  return map;
+  final description = _firstParagraph(readme.readAsStringSync());
+  if (description == null) {
+    throw ScriptException(
+      'No paragraph to describe the app in ${relativeToRoot(readme.path)}',
+    );
+  }
+  return _App(
+    name: name,
+    url: '$repository/tree/main/apps/$name',
+    description: description,
+    readme: readme,
+  );
+}
+
+/// The first paragraph of [markdown] on one line, with its links reduced to
+/// their text: the relative links of an app README break in another README.
+///
+/// Headings, HTML blocks and badges are left out.
+String? _firstParagraph(String markdown) {
+  final link = RegExp(r'\[([^\]]*)\]\([^)]*\)');
+  for (final block in markdown.split(RegExp(r'\n\s*\n'))) {
+    final text = block.trim();
+    if (text.isEmpty ||
+        text.startsWith('#') ||
+        text.startsWith('<') ||
+        text.startsWith('![') ||
+        text.startsWith('[![')) {
+      continue;
+    }
+    return text
+        .split('\n')
+        .map((line) => line.trim())
+        .join(' ')
+        .replaceAllMapped(link, (match) => match[1]!);
+  }
+  return null;
 }
 
 /// Renders the references block, optionally excluding the README's own
-/// package ([excludePubName]) or app ([excludeAppName]) so a README never
-/// links to itself.
-String _buildBlock({String? excludePubName, String? excludeAppName}) {
+/// package ([excludePackage]) or app ([excludeApp]) so a README never links
+/// to itself.
+String _buildBlock(
+  List<_App> apps,
+  List<Package> published, {
+  String? excludePackage,
+  String? excludeApp,
+}) {
   final buffer = StringBuffer();
 
-  final apps = _apps.where((a) => a.name != excludeAppName).toList();
-  if (apps.isNotEmpty) {
+  final listed = apps.where((a) => a.name != excludeApp).toList();
+  if (listed.isNotEmpty) {
     buffer
       ..writeln('## Apps')
       ..writeln();
-    for (final app in apps) {
+    for (final app in listed) {
       buffer.writeln('- [${app.name}](${app.url}) — ${app.description}');
     }
     buffer.writeln();
@@ -131,8 +161,9 @@ String _buildBlock({String? excludePubName, String? excludeAppName}) {
     ..writeln()
     ..writeln('Other bricks of the crdt "system" are:')
     ..writeln();
-  for (final pubName in _packagePubNames.where((p) => p != excludePubName)) {
-    buffer.writeln('- [$pubName](https://pub.dev/packages/$pubName)');
+  for (final package in published.where((p) => p.name != excludePackage)) {
+    final name = package.name;
+    buffer.writeln('- [$name](https://pub.dev/packages/$name)');
   }
 
   return buffer.toString().trimRight();
@@ -148,8 +179,7 @@ String _buildBlock({String? excludePubName, String? excludeAppName}) {
 /// of the file.
 void _updateReadme(io.File readme, String block) {
   if (!readme.existsSync()) {
-    logger.error('README not found: ${_relative(readme)}');
-    badExit();
+    throw ScriptException('README not found: ${relativeToRoot(readme.path)}');
   }
 
   final lines = readme.readAsStringSync().split('\n');
@@ -163,7 +193,7 @@ void _updateReadme(io.File readme, String block) {
     // No existing block — append at end of file.
     final before = _dropTrailingBlanks(lines);
     readme.writeAsStringSync('${before.join('\n')}\n\n$block\n');
-    logger.info('Appended references to ${_relative(readme)}');
+    logger.info('Appended references to ${relativeToRoot(readme.path)}');
     return;
   }
 
@@ -191,37 +221,32 @@ void _updateReadme(io.File readme, String block) {
   }
 
   readme.writeAsStringSync(buffer.toString());
-  logger.info('Rewrote references in ${_relative(readme)}');
+  logger.info('Rewrote references in ${relativeToRoot(readme.path)}');
 }
 
 /// Bumps the pubspec build number and prepends a documentation-release
 /// CHANGELOG stanza.
-void _cutDocumentationRelease({
-  required String pubName,
-  required List<String> dir,
-  required io.File pubspec,
-  required io.File changelog,
-}) {
-  final rawVersion = YamlReader(pubspec).stringOrNull('version');
-  if (rawVersion == null) {
-    logger.error('No version in ${_relative(pubspec)}');
-    badExit();
+void _cutDocumentationRelease(Package package, String repository) {
+  final current = package.pubspec.version;
+  if (current == null) {
+    throw ScriptException(
+      'No version in ${relativeToRoot(package.pubspecFile.path)}',
+    );
   }
-
-  final current = Version.parse(rawVersion);
   final next = _bumpBuild(current);
 
+  final pubspec = package.pubspecFile;
+  final text = pubspec.readAsStringSync();
+  final span = (yaml.loadYaml(text) as yaml.YamlMap).nodes['version']!.span;
   pubspec.writeAsStringSync(
-    pubspec.readAsStringSync().replaceFirst(
-          'version: $current',
-          'version: $next',
-        ),
+    text.replaceRange(span.start.offset, span.end.offset, '$next'),
   );
 
-  final stanza = '## [$next](https://github.com/MattiaPispisa/crdt/tree/'
-      '$pubName-v$next/packages/${dir.join('/')})\n'
+  final changelog = io.File(path.join(package.dir.path, 'CHANGELOG.md'));
+  final stanza = '## [$next]($repository/tree/'
+      '${package.name}-v$next/${package.repoPath})\n'
       '\n'
-      '**Date:** ${_today()}\n'
+      '**Date:** ${DateTime.now().toIso8601String().substring(0, 10)}\n'
       '\n'
       '- Documentation release: refreshes the CHANGELOG and docs published on '
       'pub.dev. No functional changes since `${_withoutBuild(current)}`.\n'
@@ -230,7 +255,7 @@ void _cutDocumentationRelease({
     stanza + (changelog.existsSync() ? changelog.readAsStringSync() : ''),
   );
 
-  logger.info('$pubName: $current → $next');
+  logger.info('${package.name}: $current → $next');
 }
 
 /// Returns [version] with its `+N` build metadata incremented (added as `+1`
@@ -255,13 +280,6 @@ Version _withoutBuild(Version version) => Version(
       pre: version.preRelease.isEmpty ? null : version.preRelease.join('.'),
     );
 
-/// Today's date as `YYYY-MM-DD`.
-String _today() {
-  final now = DateTime.now();
-  String two(int n) => n.toString().padLeft(2, '0');
-  return '${now.year}-${two(now.month)}-${two(now.day)}';
-}
-
 List<String> _dropTrailingBlanks(List<String> lines) {
   final result = List<String>.of(lines);
   while (result.isNotEmpty && result.last.trim().isEmpty) {
@@ -269,6 +287,3 @@ List<String> _dropTrailingBlanks(List<String> lines) {
   }
   return result;
 }
-
-String _relative(io.File file) =>
-    path.relative(file.path, from: io.Directory.current.path);
