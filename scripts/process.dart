@@ -3,7 +3,7 @@ import 'dart:io' as io;
 
 import 'logs.dart';
 
-/// A failure that the script reports with its [message] alone.
+/// A failure that the script reports without a stack trace.
 class ScriptException implements Exception {
   ScriptException(this.message);
 
@@ -21,12 +21,13 @@ Future<Never> badExit(
 }) async {
   logger.error(message, error: error, stackTrace: stackTrace);
   await logger.close();
+  await Future.wait([io.stdout.flush(), io.stderr.flush()]);
   io.exit(1);
 }
 
 /// Runs [action], and exits with [error] when it throws.
 ///
-/// A [ScriptException] exits with its own message.
+/// A [ScriptException] adds its message, any other error its stack trace.
 Future<void> step({
   required FutureOr<void> Function() action,
   required String error,
@@ -34,7 +35,7 @@ Future<void> step({
   try {
     await action();
   } on ScriptException catch (exception) {
-    await badExit(exception.message);
+    await badExit(error, error: exception);
   } catch (exception, stackTrace) {
     await badExit(error, error: exception, stackTrace: stackTrace);
   }

@@ -16,7 +16,8 @@ import 'workspace.dart';
 ///
 /// The published packages and the apps are read from the workspace: a
 /// package is published when `melos publish` would publish it, an app is a
-/// folder of `apps/`, described by the first paragraph of its README.
+/// folder of `apps/` with a README, described by the text between its
+/// `<!-- app-description -->` and `<!-- /app-description -->` markers.
 ///
 /// Run from the repo root: `dart run scripts/update_references.dart`
 /// (or `melos run update_references`).
@@ -24,8 +25,7 @@ Future<void> main() {
   return step(
     action: () {
       final repository = repositoryUrl();
-      final published = packages().where((p) => p.isPublished).toList()
-        ..sort(_coreFirst);
+      final published = _sorted(packages().where((p) => p.isPublished));
       final apps = _apps(repository);
 
       logger
@@ -52,13 +52,30 @@ Future<void> main() {
   );
 }
 
-/// The packages of `packages/core` first, then the others, each group by
-/// path.
-int _coreFirst(Package a, Package b) {
-  int group(Package package) =>
-      package.repoPath.startsWith('packages/core/') ? 0 : 1;
-  final byGroup = group(a).compareTo(group(b));
-  return byGroup != 0 ? byGroup : a.repoPath.compareTo(b.repoPath);
+/// The packages listed first, in this order.
+const _first = ['crdt_lf', 'crdt_socket_sync', 'crdt_lf_flutter'];
+
+/// [packages] with [_first] on top, then the packages of `packages/core`,
+/// then the others, each group by path.
+List<Package> _sorted(Iterable<Package> packages) {
+  final names = {for (final package in packages) package.name};
+  final missing = _first.where((name) => !names.contains(name));
+  if (missing.isNotEmpty) {
+    throw ScriptException('Not a published package: ${missing.join(', ')}');
+  }
+
+  int rank(Package package) {
+    final index = _first.indexOf(package.name);
+    if (index != -1) return index;
+    return _first.length +
+        (package.repoPath.startsWith('packages/core/') ? 0 : 1);
+  }
+
+  return packages.toList()
+    ..sort((a, b) {
+      final byRank = rank(a).compareTo(rank(b));
+      return byRank != 0 ? byRank : a.repoPath.compareTo(b.repoPath);
+    });
 }
 
 /// An app entry rendered under the `## Apps` heading.
@@ -76,12 +93,13 @@ class _App {
   final io.File readme;
 }
 
-/// Every folder of `apps/`, sorted by name.
+/// Every folder of `apps/` with a README, sorted by name.
 List<_App> _apps(String repository) {
   final dirs = appsDir()
       .listSync()
       .whereType<io.Directory>()
       .where((dir) => !isSkipped(dir))
+      .where((dir) => io.File(path.join(dir.path, 'README.md')).existsSync())
       .toList()
     ..sort((a, b) => a.path.compareTo(b.path));
 
@@ -93,45 +111,48 @@ List<_App> _apps(String repository) {
 _App _app(io.Directory dir, String repository) {
   final name = path.basename(dir.path);
   final readme = io.File(path.join(dir.path, 'README.md'));
-  if (!readme.existsSync()) {
-    throw ScriptException('README not found: ${relativeToRoot(readme.path)}');
-  }
-  final description = _firstParagraph(readme.readAsStringSync());
-  if (description == null) {
+  final match = _description.firstMatch(readme.readAsStringSync());
+  if (match == null) {
     throw ScriptException(
-      'No paragraph to describe the app in ${relativeToRoot(readme.path)}',
+      'No <!-- app-description --> in ${relativeToRoot(readme.path)}',
     );
   }
   return _App(
     name: name,
     url: '$repository/tree/main/apps/$name',
-    description: description,
+    description: _oneLine(match[1]!, repository: repository, app: name),
     readme: readme,
   );
 }
 
-/// The first paragraph of [markdown] on one line, with its links reduced to
-/// their text: the relative links of an app README break in another README.
-///
-/// Headings, HTML blocks and badges are left out.
-String? _firstParagraph(String markdown) {
-  final link = RegExp(r'\[([^\]]*)\]\([^)]*\)');
-  for (final block in markdown.split(RegExp(r'\n\s*\n'))) {
-    final text = block.trim();
-    if (text.isEmpty ||
-        text.startsWith('#') ||
-        text.startsWith('<') ||
-        text.startsWith('![') ||
-        text.startsWith('[![')) {
-      continue;
-    }
-    return text
-        .split('\n')
-        .map((line) => line.trim())
-        .join(' ')
-        .replaceAllMapped(link, (match) => match[1]!);
-  }
-  return null;
+final _description = RegExp(
+  r'<!--\s*app-description\s*-->(.*?)<!--\s*/app-description\s*-->',
+  dotAll: true,
+);
+final _link = RegExp(r'\[([^\]]*)\]\(([^)\s]+)\)');
+
+/// [markdown] on one line, with its relative links made absolute: the
+/// description is copied into the READMEs of other folders.
+String _oneLine(
+  String markdown, {
+  required String repository,
+  required String app,
+}) {
+  final text = markdown
+      .trim()
+      .split('\n')
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty)
+      .join(' ');
+  return text.replaceAllMapped(_link, (match) {
+    final target = match[2]!;
+    if (Uri.parse(target).hasScheme) return match[0]!;
+    final url = target.startsWith('#')
+        ? '$repository/tree/main/apps/$app$target'
+        : '$repository/tree/main/'
+            '${path.posix.normalize(path.posix.join('apps/$app', target))}';
+    return '[${match[1]}]($url)';
+  });
 }
 
 /// Renders the references block, optionally excluding the README's own
