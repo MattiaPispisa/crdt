@@ -1,6 +1,6 @@
 ## [0.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_devtools_extension-v0.1.0/packages/core/crdt_lf_devtools_extension)
 
-**Date:** --
+**Date:** 2026-11-28
 
 - Rebuilt on a service extension of `crdt_lf` (`ext.crdt_lf.devtools`): it works in profile mode
   and on Flutter web, and only reads. Requires `crdt_lf: ^5.5.0` [5](https://github.com/MattiaPispisa/crdt/issues/5).
