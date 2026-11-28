@@ -2,14 +2,11 @@ import 'fs.dart';
 import 'logs.dart';
 import 'process.dart';
 
-void main() async {
+Future<void> main() async {
   logger.info('Building Docs...');
-
-  final result = await npmRunBuild(workingDir: docsDir());
-  if (result.isNotOk) {
-    logger.error('Docs build failed (exit code: ${result.exitCode})');
-    badExit();
-  }
-
+  await step(
+    action: () => run('npm', ['run', 'build'], workingDir: docsDir()),
+    error: 'Docs build failed',
+  );
   logger.info('Docs build done ✅');
 }

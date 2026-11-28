@@ -10,10 +10,12 @@
 
 </div>
 
+<!-- app-description -->
 Real-time collaborative markdown editor built on
 [`crdt_lf`](../../packages/core/crdt_lf),
 [`crdt_lf_flutter`](../../packages/core/crdt_lf_flutter) and the **relay mode** of
 [`crdt_socket_sync`](../../packages/core/crdt_socket_sync).
+<!-- /app-description -->
 
 - `client/` — Flutter web app (editor + live preview, shared cursors). It
   uses the package's `WebSocketRelayClient` and `ClientAwarenessPlugin`

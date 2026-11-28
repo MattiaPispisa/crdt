@@ -1,209 +1,60 @@
 import 'dart:io' as io;
+
 import 'package:en_logger/en_logger.dart';
 import 'package:path/path.dart' as path;
 
-io.Directory assetsDir({List<String> subParts = const []}) {
-  return [io.Directory.current.path, 'assets', ...subParts].toDir();
+/// Folders that a walk of the repository never enters, besides the hidden
+/// ones.
+const _skipped = {'build', 'node_modules'};
+
+/// The repository root: every script runs from there.
+String get rootPath => io.Directory.current.path;
+
+/// [file] relative to [rootPath].
+String relativeToRoot(String file) => path.relative(file, from: rootPath);
+
+io.Directory rootDir([List<String> parts = const []]) {
+  return io.Directory(path.joinAll([rootPath, ...parts]));
 }
 
-io.Directory docsDir({List<String> subParts = const []}) {
-  return [io.Directory.current.path, 'docs', ...subParts].toDir();
+io.Directory assetsDir([List<String> parts = const []]) {
+  return rootDir(['assets', ...parts]);
 }
 
-io.Directory greyhoundMarkdownDir({List<String> subParts = const []}) {
-  return [
-    io.Directory.current.path,
-    'apps',
-    'greyhound_markdown',
-    'client',
-    ...subParts,
-  ].toDir();
+io.Directory docsDir([List<String> parts = const []]) {
+  return rootDir(['docs', ...parts]);
 }
 
-/// The shared Greyhound Markdown artwork, source of the app's web icons.
-io.File greyhoundLogo() {
-  return io.File(
-    path.join(
-      assetsDir(subParts: ['images']).path,
-      'greyhound_markdown_logo.png',
-    ),
-  );
+io.Directory packagesDir([List<String> parts = const []]) {
+  return rootDir(['packages', ...parts]);
 }
 
-io.Directory crdtLfFlutterExampleDir({List<String> subParts = const []}) {
-  return crdtLfDir(subParts: ['flutter_example', ...subParts]);
+io.Directory appsDir([List<String> parts = const []]) {
+  return rootDir(['apps', ...parts]);
 }
 
-io.Directory clientExampleDir({List<String> subParts = const []}) {
-  return crdtLfSocketSyncDir(subParts: ['client_example', ...subParts]);
+io.Directory crdtLfDir([List<String> parts = const []]) {
+  return packagesDir(['core', 'crdt_lf', ...parts]);
 }
 
-io.File crdtLfExamplePubspecLock() {
-  return pubspecLockOf(crdtLfFlutterExampleDir());
-}
-
-io.File clientExamplePubspecLock() {
-  return pubspecLockOf(clientExampleDir());
-}
-
-/// The `pubspec.lock` file inside [dir].
-io.File pubspecLockOf(io.Directory dir) {
-  return io.File(path.join(dir.path, 'pubspec.lock'));
-}
-
-io.Directory crdtLfDir({List<String> subParts = const []}) {
-  return packagesDir(subParts: ['core', 'crdt_lf', ...subParts]);
-}
-
-io.Directory crdtLfSocketSyncDir({List<String> subParts = const []}) {
-  return packagesDir(subParts: ['core', 'crdt_socket_sync', ...subParts]);
-}
-
-io.Directory packagesDir({List<String> subParts = const []}) {
-  return [io.Directory.current.path, 'packages', ...subParts].toDir();
-}
-
-io.Directory appsDir({List<String> subParts = const []}) {
-  return [io.Directory.current.path, 'apps', ...subParts].toDir();
-}
-
-/// Every package root under `packages/`, at any nesting depth.
-///
-/// A package root is a directory containing a `pubspec.yaml`. The walk does
-/// not descend into a matched package's subdirectories, so `example/`,
-/// `flutter_example/`, `client_example/` (which have their own
-/// `pubspec.yaml`) are never returned.
-List<io.Directory> packageDirs() {
-  final result = <io.Directory>[];
-
-  void walk(io.Directory dir) {
-    if (io.File(path.join(dir.path, 'pubspec.yaml')).existsSync()) {
-      result.add(dir);
-      return;
-    }
-    for (final entity in dir.listSync().whereType<io.Directory>()) {
-      walk(entity);
-    }
-  }
-
-  for (final entity in packagesDir().listSync().whereType<io.Directory>()) {
-    walk(entity);
-  }
-
-  return result..sort((a, b) => a.path.compareTo(b.path));
-}
-
-/// Copies the root `CONTRIBUTING.md` into [to] as `contributing.md`.
-///
-/// The guide is written for GitHub, so the copy is adapted to Docusaurus:
-/// the front matter is prepended, the inline table of contents is dropped
-/// (the site renders its own) and the repository-relative links are made
-/// absolute.
-void copyContributing({
-  required io.Directory to,
-  EnLogger? logger,
-}) {
-  if (!to.existsSync()) {
-    to.createSync(recursive: true);
-  }
-
-  final source = io.File(
-    path.join(io.Directory.current.path, 'CONTRIBUTING.md'),
-  );
-
-  const frontMatter = '---\n'
-      'sidebar_position: 99\n'
-      'title: Contributing\n'
-      '---\n'
-      '\n';
-
-  final content = _absoluteRepositoryLinks(
-    _dropInlineToc(source.readAsStringSync()),
-  );
-  io.File(path.join(to.path, 'contributing.md'))
-      .writeAsStringSync('$frontMatter$content');
-  logger?.info('Copied CONTRIBUTING.md');
-}
-
-/// Copies the `benchmarks/results.md` of every package into [to], as
-/// `<package folder>.md`.
-///
-/// The benchmark pages of the site import these files, so they show the
-/// results committed in the repository.
-void copyBenchmarkResults({
-  required io.Directory to,
-  EnLogger? logger,
-}) {
-  if (to.existsSync()) {
-    to.deleteSync(recursive: true);
-  }
-  to.createSync(recursive: true);
-
-  for (final package in packageDirs()) {
-    final results = io.File(
-      path.join(package.path, 'benchmarks', 'results.md'),
-    );
-    if (!results.existsSync()) {
-      continue;
-    }
-    final name = path.basename(package.path);
-    results.copySync(path.join(to.path, '$name.md'));
-    logger?.info('Copied the benchmark results of $name');
-  }
-}
-
-/// Rewrites the repository-relative links (`./README.md`, `./melos.yaml`, ...)
-/// as absolute GitHub URLs, so they still resolve outside the repository.
-///
-/// Handles both the inline (`](./file)`) and the reference (`]: ./file`) link
-/// syntax.
-String _absoluteRepositoryLinks(String content) {
-  const blob = 'https://github.com/MattiaPispisa/crdt/blob/main/';
-  return content.replaceAll('](./', ']($blob').replaceAll(']: ./', ']: $blob');
-}
-
-/// Removes the leading auto-generated table of contents — the first contiguous
-/// block of list items linking to in-page anchors (e.g. `- [Title](#title)`).
-///
-/// Those links target the page H1, which Docusaurus renders as the doc title
-/// without that anchor, producing broken-anchor warnings; Docusaurus also shows
-/// its own TOC, so the inline one is redundant.
-String _dropInlineToc(String content) {
-  final lines = content.split('\n');
-  final tocItem = RegExp(r'^\s*[-*] \[.+\]\(#.+\)\s*$');
-
-  var start = -1;
-  var end = -1;
-  for (var i = 0; i < lines.length; i++) {
-    if (tocItem.hasMatch(lines[i])) {
-      if (start == -1) {
-        start = i;
+/// Every file under [dir] that [test] accepts, outside the hidden and the
+/// [_skipped] folders.
+Iterable<io.File> files(io.Directory dir, bool Function(io.File) test) sync* {
+  for (final entity in dir.listSync(followLinks: false)) {
+    if (entity is io.Directory) {
+      if (!isSkipped(entity)) {
+        yield* files(entity, test);
       }
-      end = i;
-    } else if (start != -1) {
-      break;
+    } else if (entity is io.File && test(entity)) {
+      yield entity;
     }
   }
-
-  if (start == -1) {
-    return content;
-  }
-
-  // Also drop a blank line right before and after the block, if any.
-  var from = start;
-  var to = end + 1;
-  if (from > 0 && lines[from - 1].trim().isEmpty) {
-    from -= 1;
-  }
-  if (to < lines.length && lines[to].trim().isEmpty) {
-    to += 1;
-  }
-  lines.removeRange(from, to);
-  return lines.join('\n');
 }
 
-extension _IterableHelper on Iterable<String> {
-  io.Directory toDir() => io.Directory(path.joinAll(this));
+/// Whether a walk of the repository leaves [dir] out.
+bool isSkipped(io.Directory dir) {
+  final name = path.basename(dir.path);
+  return name.startsWith('.') || _skipped.contains(name);
 }
 
 extension DirectoryHelper on io.Directory {

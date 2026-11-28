@@ -6,8 +6,6 @@ import 'fs.dart';
 import 'logs.dart';
 import 'process.dart';
 
-const _extension = ['core', 'crdt_lf_devtools_extension'];
-
 /// Renderer files of `canvaskit/` that no build of the extension loads.
 ///
 /// The WebAssembly build loads `skwasm`, the JavaScript fallback loads
@@ -24,45 +22,53 @@ const _unusedRenderers = [
 /// fallback, and copies it into `crdt_lf/extension/devtools/build`.
 ///
 /// The renderer is served from the build, so the extension opens offline.
-void main() async {
-  final source = packagesDir(subParts: _extension);
-  final destination = crdtLfDir(subParts: ['extension', 'devtools', 'build']);
+Future<void> main() async {
+  final source = packagesDir(['core', 'crdt_lf_devtools_extension']);
+  final destination = crdtLfDir(['extension', 'devtools', 'build']);
 
   logger.info('Building the DevTools extension...');
-  final build = await runStreamed(
-    'flutter',
-    [
-      'build',
-      'web',
-      '--wasm',
-      '--release',
-      '--no-tree-shake-icons',
-      '--no-web-resources-cdn',
-    ],
-    workingDir: source,
+  await step(
+    action: () => run(
+      'flutter',
+      [
+        'build',
+        'web',
+        '--wasm',
+        '--release',
+        '--no-tree-shake-icons',
+        '--no-web-resources-cdn',
+      ],
+      workingDir: source,
+    ),
+    error: 'DevTools extension build failed',
   );
-  if (build.exitCode != 0) {
-    logger.error('DevTools extension build failed (${build.exitCode})');
-    badExit();
-  }
 
-  if (destination.existsSync()) {
-    destination.deleteSync(recursive: true);
-  }
-  packagesDir(subParts: [..._extension, 'build', 'web'])
-      .copySync(to: destination);
-  _prune(destination);
+  await step(
+    action: () {
+      if (destination.existsSync()) {
+        destination.deleteSync(recursive: true);
+      }
+      io.Directory(path.join(source.path, 'build', 'web'))
+          .copySync(to: destination);
+      _prune(destination);
+    },
+    error: 'Unable to copy the DevTools extension build',
+  );
   logger.info('Copied the build to ${destination.path}');
 
-  final validate = await runStreamed(
-    'dart',
-    ['run', 'devtools_extensions', 'validate', '--package=../crdt_lf'],
-    workingDir: source,
+  await step(
+    action: () => run(
+      'dart',
+      [
+        'run',
+        'devtools_extensions',
+        'validate',
+        '--package=${path.relative(crdtLfDir().path, from: source.path)}',
+      ],
+      workingDir: source,
+    ),
+    error: 'DevTools extension is not valid',
   );
-  if (validate.exitCode != 0) {
-    logger.error('DevTools extension is not valid (${validate.exitCode})');
-    badExit();
-  }
 
   logger.info('DevTools extension build done ✅');
 }
