@@ -9,7 +9,7 @@ int _bad = 1;
 Future<StreamedResult> npmI({
   io.Directory? workingDir,
   bool ci = false,
-}) async {
+}) {
   return runStreamed(
     'npm',
     [
@@ -20,7 +20,7 @@ Future<StreamedResult> npmI({
 }
 
 /// Runs `npm run build` in [workingDir], streaming output to the console.
-Future<StreamedResult> npmRunBuild({io.Directory? workingDir}) async {
+Future<StreamedResult> npmRunBuild({io.Directory? workingDir}) {
   return runStreamed(
     'npm',
     ['run', 'build'],

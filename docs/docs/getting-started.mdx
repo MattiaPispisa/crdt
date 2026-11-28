@@ -20,6 +20,18 @@ dart pub add crdt_lf      # or: flutter pub add crdt_lf
 `crdt_lf` is pure Dart: it runs on the Dart VM, in Flutter on every platform,
 and on the web.
 
+### With a coding agent
+
+`crdt_lf` ships **agent skills**: instructions that teach a coding agent
+(Claude Code, Cursor, Codex, …) how to wire the packages. Install them into
+your project with [`skills`](https://pub.dev/packages/skills):
+
+```sh
+dart run skills@ get --package crdt_lf
+```
+
+Run it again after you upgrade `crdt_lf`: the skills follow the version.
+
 ## Your first document
 
 A `CRDTDocument` holds the data. A **handler** is one value inside it — a text,

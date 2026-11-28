@@ -38,6 +38,10 @@ scripts:
     name: "Recipes check"
     description: "Fail when a README, an example or a docs page differs from its recipe"
     run: dart run scripts/recipes_sync.dart --check
+  skills_check:
+    name: "Skills check"
+    description: "Lint the agent skills of the packages: spec, names, published archive, links to the docs site, API names"
+    run: dart run scripts/skills_check.dart
   update_references:
     name: "Update references"
     description: "Propagate package/app references into READMEs and cut a documentation release"

@@ -446,6 +446,25 @@ jobs:
       - name: 🍳 Check the READMEs, the examples and the docs pages
         run: melos run recipes_check
 
+  # The agent skills of the packages: the lint, the published archive, the
+  # links to the docs site and the API names they quote.
+  skills_check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📚 Git Checkout
+        uses: actions/checkout@v7
+      - name: 🐦 Setup Flutter
+        uses: kuhnroyal/flutter-fvm-config-action@v3
+        with:
+          setup: true
+          cache: true
+      - name: 📦 Setup melos and install the dependencies
+        uses: bluefireteam/melos-action@v3
+        env:
+          MELOS_PACKAGES: crdt_lf
+      - name: 🧠 Check the agent skills
+        run: melos run skills_check
+
   license_check:
     runs-on: ubuntu-latest
     steps:
@@ -471,6 +490,7 @@ jobs:
       - changes
       - license_check
       - recipes_check
+      - skills_check
       - hlc
       - crdt_lf
       - crdt_lf_persistence
