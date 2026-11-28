@@ -13,19 +13,21 @@ order. Each rule links the page that explains why.
 
 - Read the versions in `pubspec.lock`. For signatures, read the dartdoc of the
   installed packages: their folders are in `.dart_tool/package_config.json`.
-- Do not write the API from memory: 5.0 changed how handlers name their kind
-  ([migration](https://mattiapispisa.it/crdt/docs/migrations)).
+- Do not write the API from memory: it changes between major versions. Code
+  written for an older version: follow the
+  [migrations](https://mattiapispisa.it/crdt/docs/migrations).
 - Start from the closest recipe below. Each one is a complete setup, run by a
   test.
 
 ## Decide
 
 1. **Which packages.** Add only what the app needs:
-   - keep it on the device: `crdt_lf_hive` (also on the web),
-     `crdt_lf_sqlite` (Dart VM and native Flutter), `crdt_lf_drift` (the app
-     already uses Drift). [Which adapter](https://mattiapispisa.it/crdt/docs/connectors/persistence#which-adapter)
-   - sync with other peers: `crdt_socket_sync`. In a Dart Frog or Serverpod
-     backend: `crdt_socket_sync_dart_frog`, `crdt_socket_sync_serverpod`.
+   - keep it on the device: a storage adapter, such as `crdt_lf_hive` (also
+     on the web), `crdt_lf_sqlite` (Dart VM and native Flutter), …
+     [All the adapters](https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters)
+   - sync with other peers: `crdt_socket_sync`. A backend built on a server
+     framework adds the adapter of that framework.
+     [Server frameworks](https://mattiapispisa.it/crdt/docs/connectors/sync/server-frameworks)
    - Flutter widgets: `crdt_lf_flutter`. A rich text editor: `crdt_lf_quill`.
 2. **Which sync mode.** A relay stores and forwards opaque changes: any
    backend, rooms on demand. A server–client server holds the documents and
@@ -44,7 +46,7 @@ order. Each rule links the page that explains why.
    - [server-client-sync](https://mattiapispisa.it/crdt/docs/recipes/server-client-sync),
      [relay-rooms](https://mattiapispisa.it/crdt/docs/recipes/relay-rooms):
      a `dart:io` server and its clients.
-   - Dart Frog and Serverpod servers: [Server frameworks](https://mattiapispisa.it/crdt/docs/connectors/sync/server-frameworks).
+   - None fits: [all the recipes](https://mattiapispisa.it/crdt/docs/recipes).
 
 ## Rules
 
@@ -55,7 +57,8 @@ order. Each rule links the page that explains why.
    with `CRDTDocument()`: the replica or `openDocument` restores the stored
    id. [Peer identity](https://mattiapispisa.it/crdt/docs/connectors/persistence/how-it-works#peer-identity)
 3. `documentId` names the resource, the room: every peer of it opens the same
-   id. [The document](https://mattiapispisa.it/crdt/docs/document)
+   id, and builds its handlers with the same ids.
+   [The document](https://mattiapispisa.it/crdt/docs/document)
 4. Build the handlers on `replica.document` after `open` returns. Register the
    kinds of nested handlers in `onDocument`, before the restore.
 5. Close what you built on the document first (undo managers, listeners), then
@@ -63,9 +66,8 @@ order. Each rule links the page that explains why.
    backend owns.
 6. Pass `onStorageError` (replica) or `onError` (persistence): without them a
    failure is silent. [When a write fails](https://mattiapispisa.it/crdt/docs/connectors/persistence/how-it-works#when-a-write-fails)
-7. Hive: call `CRDTHive.initialize`, and `Hive.init` with a folder outside the
-   web. SQLite does not run on the web.
-   [Persistence](https://mattiapispisa.it/crdt/docs/connectors/persistence)
+7. Set up the storage adapter before `open`: each one has its own step.
+   [Adapters](https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters)
 8. Flutter: `CrdtProvider.value` on the document the replica opened, then
    `CrdtHandlerBuilder` or `CrdtTextFieldBuilder`. Do not rebuild with a
    `StreamBuilder` on the document and `setState`.
@@ -133,11 +135,3 @@ void dispose() {
 }
 ```
 <!-- /recipe -->
-
-## Check your work
-
-- The document is restored before the client connects.
-- The peer id comes from the storage, so it is the same after a restart.
-- Every peer opens the same `documentId` and the same handler ids.
-- The document is closed once, by its owner, after what was built on it.
-- Storage errors are reported, and presence stays out of the document.
